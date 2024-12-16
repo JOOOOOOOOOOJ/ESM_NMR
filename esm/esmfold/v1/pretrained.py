@@ -4,14 +4,37 @@ import torch
 
 from esm.esmfold.v1.esmfold import ESMFold
 
+import os
+import subprocess
+
+def install_aria2():
+    """Ensure aria2 is installed."""
+    try:
+        subprocess.run(["aria2c", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except FileNotFoundError:
+        print("Installing aria2...")
+        os.system("apt-get install aria2 -qq")
+
+def _download_file(url):
+    """Download a file using aria2."""
+    print(f"Downloading {url}...")
+    result = subprocess.run(
+        ["aria2c", "-q", "-x", "16", url],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to download {url}. Error: {result.stderr.decode()}")
 
 def _load_model(model_name):
+    install_aria2()
     if model_name.endswith(".pt"):  # local, treat as filepath
         model_path = Path(model_name)
         model_data = torch.load(str(model_path), map_location="cpu")
     else:  # load from hub
+        print('nihao')
         url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
-        model_data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu")
+        _download_file(url)
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)
