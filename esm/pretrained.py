@@ -84,13 +84,13 @@ def load_hub_workaround(url, device="cuda"):
 
 def load_regression_hub(model_name):
     url = f"https://dl.fbaipublicfiles.com/fair-esm/regression/{model_name}-contact-regression.pt"
-    regression_data = load_hub_workaround(url,'cpu')
+    regression_data = load_hub_workaround(url)
     return regression_data
 
 
 def _download_model_and_regression_data(model_name):
     url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
-    model_data = load_hub_workaround(url)
+    model_data = load_hub_workaround(url, device="cpu")
     if _has_regression_weights(model_name):
         regression_data = load_regression_hub(model_name)
     else:
