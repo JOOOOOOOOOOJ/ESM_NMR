@@ -54,14 +54,15 @@ def _load_model(model_name):
         downloaded_file = _download_file(url)
         print(f"Loading downloaded model: {downloaded_file}")
         model_data = torch.load(str(downloaded_file), map_location="cpu")
-    print('wobuhao')
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
+    print('wobuhao1')
     model = ESMFold(esmfold_config=cfg)
-    
+    print('wobuhao2')
     expected_keys = set(model.state_dict().keys())
+    print('wobuhao3')
     found_keys = set(model_state.keys())
-
+    print('wobuhao4')
     missing_essential_keys = []
     for missing_key in expected_keys - found_keys:
         if not missing_key.startswith("esm."):
