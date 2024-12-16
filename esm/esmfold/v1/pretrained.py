@@ -15,16 +15,30 @@ def install_aria2():
         print("Installing aria2...")
         os.system("apt-get install aria2 -qq")
 
-def _download_file(url):
-    """Download a file using aria2."""
+def _download_file(url, save_dir="downloads", filename=None):
+    """Download a file using aria2 and return the path to the downloaded file."""
     print(f"Downloading {url}...")
+    
+    # Ensure save directory exists
+    save_path = Path(save_dir)
+    save_path.mkdir(parents=True, exist_ok=True)
+
+    # Use custom filename or extract from URL
+    filename = filename or url.split("/")[-1]
+    full_path = save_path / filename
+
+    # Run aria2c download command
     result = subprocess.run(
-        ["aria2c", "-q", "-x", "16", url],
+        ["aria2c", "-q", "-x", "16", "-d", str(save_path), "-o", filename, url],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to download {url}. Error: {result.stderr.decode()}")
+
+    print(f"Downloaded to {full_path}")
+    return full_path
+
 
 def _load_model(model_name):
     install_aria2()
@@ -32,9 +46,10 @@ def _load_model(model_name):
         model_path = Path(model_name)
         model_data = torch.load(str(model_path), map_location="cpu")
     else:  # load from hub
-        print('nihao')
         url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
-        _download_file(url)
+        downloaded_file = _download_file(url)
+        print(f"Loading downloaded model: {downloaded_file}")
+        model_data = torch.load(str(downloaded_file), map_location="cpu")
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)
