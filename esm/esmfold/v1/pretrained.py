@@ -12,7 +12,6 @@ def _load_model(model_name):
     else:  # load from hub
         url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
         model_data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu")
-    print(model_data)
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)

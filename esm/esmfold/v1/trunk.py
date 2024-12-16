@@ -22,7 +22,7 @@ class StructureModuleConfig:
     no_heads_ipa: int = 12
     no_qk_points: int = 4
     no_v_points: int = 8
-    dropout_rate: float = 0.0
+    dropout_rate: float = 0.1
     no_blocks: int = 8
     no_transition_layers: int = 1
     no_resnet_blocks: int = 2
@@ -111,6 +111,7 @@ class FoldingTrunk(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.cfg = FoldingTrunkConfig(**kwargs)
+        print(self.cfg.dropout)
         assert self.cfg.max_recycles > 0
 
         c_s = self.cfg.sequence_state_dim
