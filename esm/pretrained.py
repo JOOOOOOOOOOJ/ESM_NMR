@@ -72,7 +72,7 @@ def load_hub_workaround(url, device1="cpu"):
     downloaded_file = _download_file(url)
     print(f"Loading downloaded model: {downloaded_file}")
     try:
-        data = torch.load(str(downloaded_file), map_location=device1, mmap=True, weights_only=True)
+        data = torch.load(str(downloaded_file), map_location=device1)
     except Exception as e:
         raise RuntimeError(f"Failed to load the model from {downloaded_file}. Error: {e}")
     return data
@@ -81,15 +81,13 @@ def load_hub_workaround(url, device1="cpu"):
 
 def load_regression_hub(model_name):
     url = f"https://dl.fbaipublicfiles.com/fair-esm/regression/{model_name}-contact-regression.pt"
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    regression_data = load_hub_workaround(url, device1=device)
+    regression_data = load_hub_workaround(url, device1='cpu')
     return regression_data
 
 
 def _download_model_and_regression_data(model_name):
     url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model_data = load_hub_workaround(url, device1=device)
+    model_data = load_hub_workaround(url, device1='cpu')
     if _has_regression_weights(model_name):
         regression_data = load_regression_hub(model_name)
     else:

@@ -22,7 +22,7 @@ class StructureModuleConfig:
     no_heads_ipa: int = 12
     no_qk_points: int = 4
     no_v_points: int = 8
-    dropout_rate: float = 0.1
+    dropout_rate: float = 0.3
     no_blocks: int = 8
     no_transition_layers: int = 1
     no_resnet_blocks: int = 2
@@ -41,7 +41,7 @@ class FoldingTrunkConfig:
     sequence_head_width: int = 32
     pairwise_head_width: int = 32
     position_bins: int = 32
-    dropout: float = 0.0
+    dropout: float = 0.3
     layer_drop: float = 0
     cpu_grad_checkpoint: bool = False
 
