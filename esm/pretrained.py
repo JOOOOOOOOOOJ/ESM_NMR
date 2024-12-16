@@ -10,7 +10,8 @@ from argparse import Namespace
 from pathlib import Path
 
 import torch
-
+import os
+import subprocess
 import esm
 from esm.model.esm2 import ESM2
 
