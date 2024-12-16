@@ -51,7 +51,7 @@ def _load_model(model_name):
         print(f"Loading downloaded model: {downloaded_file}")
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         print(device)
-        model_data = torch.load(str(downloaded_file), map_location=device)
+        model_data = torch.load(str(downloaded_file), map_location=device, mmap=True, weights_only=True)
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)
