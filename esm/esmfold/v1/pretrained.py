@@ -49,11 +49,12 @@ def _load_model(model_name):
         url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
         downloaded_file = _download_file(url)
         print(f"Loading downloaded model: {downloaded_file}")
-        model_data = torch.load(str(downloaded_file), map_location="cpu")
+        model_data = torch.load(str(downloaded_file), map_location="gpu")
+    print('wobuhao')
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)
-
+    
     expected_keys = set(model.state_dict().keys())
     found_keys = set(model_state.keys())
 
