@@ -68,13 +68,13 @@ def _download_file(url, save_dir="downloads", filename=None):
 #         raise Exception(f"Could not load {url}, check if you specified a correct model name?")
 #     return data
 
-def load_hub_workaround(url):
+def load_hub_workaround(url, device="cuda"):
     downloaded_file = _download_file(url)
     print(f"Loading downloaded model: {downloaded_file}")
     try:
         data = torch.load(
             str(downloaded_file),
-            map_location="cpu",
+            map_location=device,
         )
     except Exception as e:
         raise RuntimeError(f"Failed to load the model from {downloaded_file}. Error: {e}")
@@ -84,7 +84,7 @@ def load_hub_workaround(url):
 
 def load_regression_hub(model_name):
     url = f"https://dl.fbaipublicfiles.com/fair-esm/regression/{model_name}-contact-regression.pt"
-    regression_data = load_hub_workaround(url)
+    regression_data = load_hub_workaround(url,'cpu')
     return regression_data
 
 
