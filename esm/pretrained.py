@@ -27,20 +27,46 @@ def load_model_and_alphabet(model_name):
     else:
         return load_model_and_alphabet_hub(model_name)
 
+def _download_file(url, save_dir="downloads", filename=None):
+    """Download a file using aria2 and return the path to the downloaded file."""
+    print(f"Downloading {url}...")
+    
+    # Ensure save directory exists
+    save_path = Path(save_dir)
+    save_path.mkdir(parents=True, exist_ok=True)
+
+    # Use custom filename or extract from URL
+    filename = filename or url.split("/")[-1]
+    full_path = save_path / filename
+
+    # Run aria2c download command
+    result = subprocess.run(
+        ["aria2c", "-q", "-x", "16", "-d", str(save_path), "-o", filename, url],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to download {url}. Error: {result.stderr.decode()}")
+
+    print(f"Downloaded to {full_path}")
+    return full_path
 
 def load_hub_workaround(url):
     try:
         data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu")
     except RuntimeError:
         # Pytorch version issue - see https://github.com/pytorch/pytorch/issues/43106
-        fn = Path(url).name
+        # fn = Path(url).name
+        downloaded_file = _download_file(url)
+        print(f"Loading downloaded model: {downloaded_file}")
         data = torch.load(
-            f"{torch.hub.get_dir()}/checkpoints/{fn}",
+            str(downloaded_file),
             map_location="cpu",
         )
     except urllib.error.HTTPError as e:
         raise Exception(f"Could not load {url}, check if you specified a correct model name?")
     return data
+
 
 
 def load_regression_hub(model_name):
