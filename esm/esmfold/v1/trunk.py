@@ -41,7 +41,7 @@ class FoldingTrunkConfig:
     sequence_head_width: int = 32
     pairwise_head_width: int = 32
     position_bins: int = 32
-    dropout: float = 0
+    dropout: float = 0.3
     layer_drop: float = 0
     cpu_grad_checkpoint: bool = False
 
