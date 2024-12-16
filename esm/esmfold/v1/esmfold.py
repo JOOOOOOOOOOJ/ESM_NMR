@@ -39,7 +39,9 @@ class ESMFold(nn.Module):
         cfg = self.cfg
 
         self.distogram_bins = 64
-
+        ''' 
+        JOJO: Here?
+        '''
         self.esm, self.esm_dict = esm.pretrained.esm2_t36_3B_UR50D()
 
         self.esm.requires_grad_(False)

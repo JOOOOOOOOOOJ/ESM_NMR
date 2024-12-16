@@ -52,20 +52,32 @@ def _download_file(url, save_dir="downloads", filename=None):
     print(f"Downloaded to {full_path}")
     return full_path
 
+# def load_hub_workaround(url):
+#     try:
+#         data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu")
+#     except RuntimeError:
+#         # Pytorch version issue - see https://github.com/pytorch/pytorch/issues/43106
+#         # fn = Path(url).name
+#         downloaded_file = _download_file(url)
+#         print(f"Loading downloaded model: {downloaded_file}")
+#         data = torch.load(
+#             str(downloaded_file),
+#             map_location="cpu",
+#         )
+#     except urllib.error.HTTPError as e:
+#         raise Exception(f"Could not load {url}, check if you specified a correct model name?")
+#     return data
+
 def load_hub_workaround(url):
+    downloaded_file = _download_file(url)
+    print(f"Loading downloaded model: {downloaded_file}")
     try:
-        data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu")
-    except RuntimeError:
-        # Pytorch version issue - see https://github.com/pytorch/pytorch/issues/43106
-        # fn = Path(url).name
-        downloaded_file = _download_file(url)
-        print(f"Loading downloaded model: {downloaded_file}")
         data = torch.load(
             str(downloaded_file),
             map_location="cpu",
         )
-    except urllib.error.HTTPError as e:
-        raise Exception(f"Could not load {url}, check if you specified a correct model name?")
+    except Exception as e:
+        raise RuntimeError(f"Failed to load the model from {downloaded_file}. Error: {e}")
     return data
 
 
@@ -85,7 +97,9 @@ def _download_model_and_regression_data(model_name):
         regression_data = None
     return model_data, regression_data
 
-
+''' 
+Used by ESMFold v1
+'''
 def load_model_and_alphabet_hub(model_name):
     model_data, regression_data = _download_model_and_regression_data(model_name)
     return load_model_and_alphabet_core(model_name, model_data, regression_data)
