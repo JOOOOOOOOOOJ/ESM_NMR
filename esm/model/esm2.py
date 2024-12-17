@@ -34,7 +34,11 @@ class ESM2(nn.Module):
         self.eos_idx = alphabet.eos_idx
         self.prepend_bos = alphabet.prepend_bos
         self.append_eos = alphabet.append_eos
-        self.token_dropout = token_dropout
+        # self.token_dropout = token_dropout
+        ''' 
+        JOJO: test no dropout
+        '''
+        self.token_dropout = False
 
         self._init_submodules()
 
