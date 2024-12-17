@@ -130,8 +130,8 @@ class FoldingTrunk(nn.Module):
                     pairwise_state_dim=c_z,
                     sequence_head_width=self.cfg.sequence_head_width,
                     pairwise_head_width=self.cfg.pairwise_head_width,
-                    dropout=self.cfg.dropout,
-                    # dropout=0.3,
+                    # dropout=self.cfg.dropout,
+                    dropout=0.1,
                 )
                 for i in range(self.cfg.num_blocks)
             ]
