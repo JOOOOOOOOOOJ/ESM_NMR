@@ -6,7 +6,6 @@ from esm.esmfold.v1.esmfold import ESMFold
 
 import os
 import subprocess
-from torch.utils.data import DataLoader
 
 def install_aria2():
     """Ensure aria2 is installed."""

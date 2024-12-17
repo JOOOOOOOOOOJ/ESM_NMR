@@ -73,7 +73,7 @@ def load_hub_workaround(url, device1="cpu"):
     downloaded_file = _download_file(url)
     print(f"Loading downloaded model: {downloaded_file}")
     try:
-        data = DataLoader(str(downloaded_file), batch_size=32, shuffle=True, pin_memory=True)
+        data = torch.load(str(downloaded_file), map_location=device1)
     except Exception as e:
         raise RuntimeError(f"Failed to load the model from {downloaded_file}. Error: {e}")
     return data
