@@ -213,6 +213,9 @@ def _load_model_and_alphabet_core_v2(model_data):
     state_dict = model_data["model"]
     state_dict = upgrade_state_dict(state_dict)
     alphabet = esm.data.Alphabet.from_architecture("ESM-1b")
+    ''' 
+    Here is another dropout
+    '''
     model = ESM2(
         num_layers=cfg.encoder_layers,
         embed_dim=cfg.encoder_embed_dim,
@@ -220,6 +223,7 @@ def _load_model_and_alphabet_core_v2(model_data):
         alphabet=alphabet,
         token_dropout=cfg.token_dropout,
     )
+    print("token_dropout in esm2:", cfg.token_dropout)
     return model, alphabet, state_dict
 
 

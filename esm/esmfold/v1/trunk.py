@@ -111,7 +111,7 @@ class FoldingTrunk(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.cfg = FoldingTrunkConfig(**kwargs)
-        print(self.cfg.dropout)
+        print("folding trunk dropout: ", self.cfg.dropout)
         assert self.cfg.max_recycles > 0
 
         c_s = self.cfg.sequence_state_dim
