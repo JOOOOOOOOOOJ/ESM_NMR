@@ -37,7 +37,7 @@ def _download_file(url, save_dir="downloads", filename=None):
         raise RuntimeError(f"Failed to download {url}. Error: {result.stderr.decode()}")
 
     print(f"Downloaded to {full_path}")
-    return full_path
+    return result
 
 
 def _load_model(model_name):
@@ -50,8 +50,8 @@ def _load_model(model_name):
         # url = "https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t36_3B_UR50D-contact-regression.pt"
         downloaded_file = _download_file(url)
         print(f"Loading downloaded model: {downloaded_file}")
-        torch.serialization.add_safe_globals([str(downloaded_file)])
-        model_data = torch.load(str(downloaded_file), map_location="cpu", weights_only=True)
+        torch.serialization.add_safe_globals([downloaded_file])
+        model_data = torch.load(downloaded_file, map_location="cpu", weights_only=True)
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)
