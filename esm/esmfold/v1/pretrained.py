@@ -51,8 +51,7 @@ def _load_model(model_name):
         url = "https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t36_3B_UR50D-contact-regression.pt"
         downloaded_file = _download_file(url)
         print(f"Loading downloaded model: {downloaded_file}")
-        model_data = DataLoader(str(downloaded_file), batch_size=32, shuffle=True, pin_memory=True)
-        print('qifei')
+        model_data = torch.load(str(downloaded_file), map_location="cpu")
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)
