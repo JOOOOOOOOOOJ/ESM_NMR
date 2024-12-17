@@ -46,8 +46,8 @@ def _load_model(model_name):
         model_path = Path(model_name)
         model_data = torch.load(str(model_path), map_location="cpu")
     else:  # load from hub
-        # url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
-        url = "https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t36_3B_UR50D-contact-regression.pt"
+        url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
+        # url = "https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t36_3B_UR50D-contact-regression.pt"
         downloaded_file = _download_file(url)
         print(f"Loading downloaded model: {downloaded_file}")
         torch.serialization.add_safe_globals([str(downloaded_file)])
