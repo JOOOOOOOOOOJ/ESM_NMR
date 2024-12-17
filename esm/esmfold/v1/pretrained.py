@@ -52,7 +52,7 @@ def _load_model(model_name):
         downloaded_file = _download_file(url)
         print(f"Loading downloaded model: {downloaded_file}")
         # torch.serialization.add_safe_globals([str(downloaded_file)])
-        model_data = torch.load(str(downloaded_file), map_location="cpu", weights_only=True)
+        model_data = torch.load(str(downloaded_file), map_location="cpu", mmap=True)
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)
