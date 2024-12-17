@@ -6,6 +6,7 @@ from esm.esmfold.v1.esmfold import ESMFold
 
 import os
 import subprocess
+from torch.utils.data import DataLoader
 
 def install_aria2():
     """Ensure aria2 is installed."""
@@ -49,7 +50,7 @@ def _load_model(model_name):
         url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
         downloaded_file = _download_file(url)
         print(f"Loading downloaded model: {downloaded_file}")
-        model_data = torch.load(str(downloaded_file), map_location='cpu')
+        model_data = DataLoader(str(downloaded_file), batch_size=32, shuffle=True, pin_memory=True)
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)
