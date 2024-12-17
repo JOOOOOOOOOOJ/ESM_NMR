@@ -37,14 +37,15 @@ def _download_file(url, save_dir="downloads", filename=None):
         raise RuntimeError(f"Failed to download {url}. Error: {result.stderr.decode()}")
 
     print(f"Downloaded to {full_path}")
-    return result
+    return full_path
 
 
 def _load_model(model_name):
     install_aria2()
     if model_name.endswith(".pt"):  # local, treat as filepath
         model_path = Path(model_name)
-        model_data = torch.load(str(model_path), map_location="cpu", mmap=True)
+        model_data = torch.load(str(model_path), map_location="meta", mmap=True)
+
     else:  # load from hub
         url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
         # url = "https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t36_3B_UR50D-contact-regression.pt"
