@@ -52,6 +52,7 @@ def _load_model(model_name):
         downloaded_file = _download_file(url)
         print(f"Loading downloaded model: {downloaded_file}")
         model_data = DataLoader(str(downloaded_file), batch_size=32, shuffle=True, pin_memory=True)
+        print('qifei')
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
     model = ESMFold(esmfold_config=cfg)
