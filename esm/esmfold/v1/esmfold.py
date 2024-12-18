@@ -39,19 +39,21 @@ class ESMFold(nn.Module):
         cfg = self.cfg
 
         self.distogram_bins = 64
-        ''' 
-        JOJO: Here?
-        '''
+        #JO: they are esm2 model and alphabet separately
         self.esm, self.esm_dict = esm.pretrained.esm2_t36_3B_UR50D()
-
+        #JO: freeze the model
         self.esm.requires_grad_(False)
+        #JO: half the model, float32 to float16
         self.esm.half()
 
+        #JO: data from config
         self.esm_feats = self.esm.embed_dim
         self.esm_attns = self.esm.num_layers * self.esm.attention_heads
+        #JO: register a tensor as a buffer, it is not a parameter
         self.register_buffer("af2_to_esm", ESMFold._af2_to_esm(self.esm_dict))
         self.esm_s_combine = nn.Parameter(torch.zeros(self.esm.num_layers + 1))
 
+        #JO: look like AF architecture
         c_s = cfg.trunk.sequence_state_dim
         c_z = cfg.trunk.pairwise_state_dim
 
@@ -67,6 +69,11 @@ class ESMFold(nn.Module):
         self.pad_idx = 0
         self.unk_idx = self.n_tokens_embed - 2
         self.mask_idx = self.n_tokens_embed - 1
+        '''
+        JO: self.n_tokens_embed is size of the dictionary of embeddings
+        number of tokens in the dictionary
+        c_s: size of each embedding vector
+        '''
         self.embedding = nn.Embedding(self.n_tokens_embed, c_s, padding_idx=0)
 
         self.trunk = FoldingTrunk(**cfg.trunk)
@@ -83,6 +90,7 @@ class ESMFold(nn.Module):
         )
 
     @staticmethod
+    #JO: attribute index to each token in esmfold according to the alphabet in esm2
     def _af2_to_esm(d: Alphabet):
         # Remember that t is shifted from residue_constants by 1 (0 is padding).
         esm_reorder = [d.padding_idx] + [

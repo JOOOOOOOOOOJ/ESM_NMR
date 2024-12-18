@@ -28,28 +28,32 @@ class ESM2(nn.Module):
             alphabet = esm.data.Alphabet.from_architecture(alphabet)
         self.alphabet = alphabet
         self.alphabet_size = len(alphabet)
+        #JOJO: Some prepend tokens
         self.padding_idx = alphabet.padding_idx
         self.mask_idx = alphabet.mask_idx
         self.cls_idx = alphabet.cls_idx
         self.eos_idx = alphabet.eos_idx
+        #JOJO: beginning  and end of sequence tokens
         self.prepend_bos = alphabet.prepend_bos
         self.append_eos = alphabet.append_eos
-        self.token_dropout = token_dropout
         ''' 
-        JOJO: test no dropout
+        JOJO's Question:
+        what kind of influence will the token_dropout have on the model?
         '''
+        self.token_dropout = token_dropout
         # self.token_dropout = False
 
         self._init_submodules()
 
     def _init_submodules(self):
         self.embed_scale = 1
+        #JO: embedding layer is the number of tokens in the alphabet, make sense
         self.embed_tokens = nn.Embedding(
             self.alphabet_size,
             self.embed_dim,
             padding_idx=self.padding_idx,
         )
-
+        #JO: embed dim and attention heads come from config
         self.layers = nn.ModuleList(
             [
                 TransformerLayer(
@@ -63,7 +67,7 @@ class ESM2(nn.Module):
                 for _ in range(self.num_layers)
             ]
         )
-
+        #Use the attention weights to predict contacts
         self.contact_head = ContactPredictionHead(
             self.num_layers * self.attention_heads,
             self.prepend_bos,
@@ -97,7 +101,7 @@ class ESM2(nn.Module):
 
         if padding_mask is not None:
             x = x * (1 - padding_mask.unsqueeze(-1).type_as(x))
-
+        #JO: This is the layer that to be extracted
         repr_layers = set(repr_layers)
         hidden_representations = {}
         if 0 in repr_layers:

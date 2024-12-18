@@ -49,11 +49,18 @@ class ESM1LayerNorm(nn.Module):
         self.eps = eps
         self.affine = bool(affine)
         if self.affine:
+            #JO: weight and bias, the same size as embed dim
             self.weight = nn.Parameter(torch.ones(hidden_size))
             self.bias = nn.Parameter(torch.zeros(hidden_size))
         else:
             self.weight, self.bias = None, None
-
+    '''
+    JOJO: Perform a forward pass through a layer that normalizes the input tensor based on the mean and variance, with optional affine transformation.
+    input:
+        x: The input tensor of shape (N, C, ...) where N is batch size, C is number of channels, and ... is any additional dimensions.
+    output:
+        x: The normalized output tensor, with the same shape as the input, optionally transformed by learnable parameters (weight and bias).
+    '''
     def forward(self, x):
         dims = tuple(-(i + 1) for i in range(len(self.hidden_size)))
         means = x.mean(dims, keepdim=True)
@@ -80,18 +87,18 @@ try:
 except ImportError:
     from torch.nn import LayerNorm as ESM1bLayerNorm
 
-
+#JO: used for esm2 model initialization
 class TransformerLayer(nn.Module):
     """Transformer layer block."""
 
     def __init__(
         self,
         embed_dim,
-        ffn_embed_dim,
+        ffn_embed_dim, #JO: 1. ffn_embed_dim is 4 * embed_dim
         attention_heads,
-        add_bias_kv=True,
-        use_esm1b_layer_norm=False,
-        use_rotary_embeddings: bool = False,
+        add_bias_kv=True, #JO: 1. False
+        use_esm1b_layer_norm=False, #JO: 1. True
+        use_rotary_embeddings: bool = False, #JO: 1. True
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -102,7 +109,18 @@ class TransformerLayer(nn.Module):
 
     def _init_submodules(self, add_bias_kv, use_esm1b_layer_norm):
         BertLayerNorm = ESM1bLayerNorm if use_esm1b_layer_norm else ESM1LayerNorm
-
+        ''' 
+        JO:  each head will have dimension embed_dim // num_heads
+        forward input will include query, key, value
+        query: Queries are compared against key-value pairs to produce the output. 
+        (L x N x E), L is the target sequence length, N is the batch size, E is the embedding dimension.
+        key: Keys are used to calculate the attention scores.
+        (S x N x E), S is the source sequence length, N is the batch size, E is the embedding dimension.
+        value: Values are used to calculate the weighted average in the attention mechanism.
+        (S x N x E), S is the source sequence length, N is the batch size, E is the embedding dimension.
+        return: output (L x N x E), attn_weights (N x L x S)
+        '''
+        
         self.self_attn = MultiheadAttention(
             self.embed_dim,
             self.attention_heads,
@@ -110,13 +128,24 @@ class TransformerLayer(nn.Module):
             add_zero_attn=False,
             use_rotary_embeddings=self.use_rotary_embeddings,
         )
+        #JO: define weight and bias, the same size as embed dim
         self.self_attn_layer_norm = BertLayerNorm(self.embed_dim)
 
         self.fc1 = nn.Linear(self.embed_dim, self.ffn_embed_dim)
         self.fc2 = nn.Linear(self.ffn_embed_dim, self.embed_dim)
 
         self.final_layer_norm = BertLayerNorm(self.embed_dim)
-
+    '''
+    JO: Perform a forward pass through a Transformer layer, including self-attention and feed-forward layers.
+    input:
+        x: The input tensor of shape (L, N, E) where L is the sequence length, N is the batch size, and E is the embedding dimension.
+        self_attn_mask: Optional mask for attention weights to prevent attention to certain positions (L x S).
+        self_attn_padding_mask: Optional padding mask to ignore certain tokens in the input sequence (N x L).
+        need_head_weights: Boolean indicating whether to return attention weights for each head.
+    output:
+        x: The output tensor after attention and feed-forward processing, shape (L, N, E).
+        attn: Attention weights for each head, shape (N, L, S), where S is the source sequence length.
+    '''
     def forward(
         self, x, self_attn_mask=None, self_attn_padding_mask=None, need_head_weights=False
     ):
@@ -313,7 +342,7 @@ class RobertaLMHead(nn.Module):
         x = F.linear(x, self.weight) + self.bias
         return x
 
-
+#JO: used for esm2 model initialization
 class ContactPredictionHead(nn.Module):
     """Performs symmetrization, apc, and computes a logistic regression on the output features"""
 
@@ -332,9 +361,18 @@ class ContactPredictionHead(nn.Module):
         if append_eos and eos_idx is None:
             raise ValueError("Using an alphabet with eos token, but no eos token was passed in.")
         self.eos_idx = eos_idx
+        #JO: take in weight and bias, output the one dimensional output
         self.regression = nn.Linear(in_features, 1, bias)
         self.activation = nn.Sigmoid()
+    '''
+    JOJO: This class performs symmetrization, applies APC (average pairwise correlation), and computes a logistic regression on the output features.
+    input:
+        tokens: The tokenized input sequence, typically a tensor of indices representing tokens in a batch.
+        attentions: The attention map from a transformer model, representing the attention weights between token pairs.
 
+    output:
+        The sigmoid activation of the logistic regression result, typically used for binary classification or predicting contact probabilities.
+    '''
     def forward(self, tokens, attentions):
         # remove eos token attentions
         if self.append_eos:

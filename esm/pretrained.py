@@ -212,10 +212,11 @@ def _load_model_and_alphabet_core_v2(model_data):
     cfg = model_data["cfg"]["model"]
     state_dict = model_data["model"]
     state_dict = upgrade_state_dict(state_dict)
-    alphabet = esm.data.Alphabet.from_architecture("ESM-1b")
     ''' 
-    Here is another dropout
+    JOJO: Have some functions with this alphabet (tokenization)
     '''
+    alphabet = esm.data.Alphabet.from_architecture("ESM-1b")
+    #JOJO: almost all the input comes from config
     model = ESM2(
         num_layers=cfg.encoder_layers,
         embed_dim=cfg.encoder_embed_dim,

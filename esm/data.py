@@ -87,7 +87,11 @@ class FastaBatchedDataset(object):
         _flush_current_buf()
         return batches
 
-
+'''
+JOJO: Help tokinize the sequence
+input: token, text
+output: list of tokens
+'''
 class Alphabet(object):
     def __init__(
         self,
@@ -148,6 +152,7 @@ class Alphabet(object):
             prepend_bos = True
             append_eos = False
             use_msa = False
+        #JOJO: Here are the tokens we are gonna use
         elif name in ("ESM-1b", "roberta_large"):
             standard_toks = proteinseq_toks["toks"]
             prepend_toks = ("<cls>", "<pad>", "<eos>", "<unk>")

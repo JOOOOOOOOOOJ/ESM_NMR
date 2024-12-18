@@ -22,7 +22,7 @@ class StructureModuleConfig:
     no_heads_ipa: int = 12
     no_qk_points: int = 4
     no_v_points: int = 8
-    dropout_rate: float = 0.3
+    dropout_rate: float = 0.0
     no_blocks: int = 8
     no_transition_layers: int = 1
     no_resnet_blocks: int = 2
@@ -41,7 +41,7 @@ class FoldingTrunkConfig:
     sequence_head_width: int = 32
     pairwise_head_width: int = 32
     position_bins: int = 32
-    dropout: float = 0.3
+    dropout: float = 0.0
     layer_drop: float = 0
     cpu_grad_checkpoint: bool = False
 
@@ -86,7 +86,7 @@ class RelativePosition(nn.Module):
         Input:
           residue_index: B x L tensor of indices (dytpe=torch.long)
           mask: B x L tensor of booleans
-
+        JO: B is batch size, L is sequence length
         Output:
           pairwise_state: B x L x L x pairwise_state_dim tensor of embeddings
         """
@@ -122,7 +122,7 @@ class FoldingTrunk(nn.Module):
         block = TriangularSelfAttentionBlock
 
         self.pairwise_positional_embedding = RelativePosition(self.cfg.position_bins, c_z)
-
+        #JO: Look like the MultiHeadAttention is replaced by TriangularSelfAttentionBlock
         self.blocks = nn.ModuleList(
             [
                 block(
@@ -130,8 +130,8 @@ class FoldingTrunk(nn.Module):
                     pairwise_state_dim=c_z,
                     sequence_head_width=self.cfg.sequence_head_width,
                     pairwise_head_width=self.cfg.pairwise_head_width,
-                    # dropout=self.cfg.dropout,
-                    dropout=0.05,
+                    dropout=self.cfg.dropout,
+                    # dropout=0.05,
                 )
                 for i in range(self.cfg.num_blocks)
             ]
@@ -144,6 +144,7 @@ class FoldingTrunk(nn.Module):
         self.recycle_disto.weight[0].detach().zero_()
 
         self.structure_module = StructureModule(**self.cfg.structure_module)  # type: ignore
+        print(self.cfg.structure_module)
         self.trunk2sm_s = nn.Linear(c_s, self.structure_module.c_s)
         self.trunk2sm_z = nn.Linear(c_z, self.structure_module.c_z)
 

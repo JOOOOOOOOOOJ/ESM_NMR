@@ -174,14 +174,14 @@ class Attention(nn.Module):
         To handle sequences of different lengths, use mask.
 
         Inputs:
-          x: batch of input sequneces (.. x L x C)
+          x: batch of input sequneces (.. x L x C) C: embed_dim
           mask: batch of boolean masks where 1=valid, 0=padding position (.. x L_k). optional.
           bias: batch of scalar pairwise attention biases (.. x Lq x Lk x num_heads). optional.
 
         Outputs:
           sequence projection (B x L x embed_dim), attention maps (B x L x L x num_heads)
         """
-
+        #JO: h is num heads, l is sequence length, c is head width
         t = rearrange(self.proj(x), "... l (h c) -> ... h l c", h=self.num_heads)
         q, k, v = t.chunk(3, dim=-1)
 
