@@ -71,7 +71,7 @@ def get_axial_mask(mask):
     m = m.reshape(batch_dim * seq_dim, seq_dim)
     return m
 
-
+#JO: Output Position Embedding (Normalization)
 class RelativePosition(nn.Module):
     def __init__(self, bins, pairwise_state_dim):
         super().__init__()
@@ -94,7 +94,7 @@ class RelativePosition(nn.Module):
         assert residue_index.dtype == torch.long
         if mask is not None:
             assert residue_index.shape == mask.shape
-
+        #JO: Normalization comes from here
         diff = residue_index[:, None, :] - residue_index[:, :, None]
         diff = diff.clamp(-self.bins, self.bins)
         diff = diff + self.bins + 1  # Add 1 to adjust for padding index.
@@ -108,6 +108,7 @@ class RelativePosition(nn.Module):
 
 
 class FoldingTrunk(nn.Module):
+    #JO: Is called by "self.trunk = FoldingTrunk(**cfg.trunk)"
     def __init__(self, **kwargs):
         super().__init__()
         self.cfg = FoldingTrunkConfig(**kwargs)
@@ -121,6 +122,7 @@ class FoldingTrunk(nn.Module):
         assert c_z % self.cfg.pairwise_head_width == 0
         block = TriangularSelfAttentionBlock
 
+
         self.pairwise_positional_embedding = RelativePosition(self.cfg.position_bins, c_z)
         #JO: Look like the MultiHeadAttention is replaced by TriangularSelfAttentionBlock
         self.blocks = nn.ModuleList(
@@ -130,8 +132,8 @@ class FoldingTrunk(nn.Module):
                     pairwise_state_dim=c_z,
                     sequence_head_width=self.cfg.sequence_head_width,
                     pairwise_head_width=self.cfg.pairwise_head_width,
-                    # dropout=self.cfg.dropout,
-                    dropout=0.05,
+                    dropout=self.cfg.dropout,
+                    # dropout=0.05,
                 )
                 for i in range(self.cfg.num_blocks)
             ]
