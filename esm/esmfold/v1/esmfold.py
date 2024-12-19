@@ -115,7 +115,7 @@ class ESMFold(nn.Module):
         esmaa = torch.cat([bos, esmaa, eos], dim=1)
         # Use the first padding index as eos during inference.
         esmaa[range(batch_size), (esmaa != 1).sum(1)] = eosi
-
+        #JO: use the pretrained model to get the representation
         res = self.esm(
             esmaa,
             repr_layers=range(self.esm.num_layers + 1),
@@ -168,11 +168,12 @@ class ESMFold(nn.Module):
 
         # === ESM ===
         esmaa = self._af2_idx_to_esm_idx(aa, mask)
-        print(esmaa)
+        print("After using ESM tokens ",esmaa)
         if masking_pattern is not None:
             #JO: make the index at the position of masking pattern to be the mask index, this is what we defined
             esmaa = self._mask_inputs_to_esm(esmaa, masking_pattern)
-        print(esmaa)
+        print("After adding the masking patterns inside ",esmaa)
+        #JO: get the representation of the sequence: B, L, nLayers, C
         esm_s = self._compute_language_model_representations(esmaa)
 
         # Convert esm_s to the precision used by the trunk and
@@ -189,7 +190,7 @@ class ESMFold(nn.Module):
         s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
 
         s_s_0 += self.embedding(aa)
-
+        #JO: This is the last mask here in esmfold
         structure: dict = self.trunk(
             s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
         )
