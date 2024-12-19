@@ -131,6 +131,7 @@ class ESMFold(nn.Module):
         new_esmaa[pattern == 1] = self.esm_dict.mask_idx
         return new_esmaa
 
+    #JO: aa here is the input sequence
     def forward(
         self,
         aa: torch.Tensor,
@@ -156,7 +157,7 @@ class ESMFold(nn.Module):
 
         if mask is None:
             mask = torch.ones_like(aa)
-
+        #JO: So B is the number of token we get from initial sequence
         B = aa.shape[0]
         L = aa.shape[1]
         device = aa.device
@@ -275,7 +276,7 @@ class ESMFold(nn.Module):
         """
         if isinstance(sequences, str):
             sequences = [sequences]
-
+        #JO: aatype is the stacked encoded sequences, and mask is the initialized mask just the same shaoe as aatype
         aatype, mask, _residx, linker_mask, chain_index = batch_encode_sequences(
             sequences, residue_index_offset, chain_linker
         )

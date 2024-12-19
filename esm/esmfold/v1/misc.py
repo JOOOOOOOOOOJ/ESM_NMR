@@ -68,7 +68,9 @@ def batch_encode_sequences(
     residx_list = []
     linker_mask_list = []
     chain_index_list = []
+    print("This is sequence just after input: ", sequences)
     for seq in sequences:
+        #JO: get sequence encoded according to the types defined before
         aatype_seq, residx_seq, linker_mask_seq, chain_index_seq = encode_sequence(
             seq,
             residue_index_offset=residue_index_offset,
@@ -78,11 +80,13 @@ def batch_encode_sequences(
         residx_list.append(residx_seq)
         linker_mask_list.append(linker_mask_seq)
         chain_index_list.append(chain_index_seq)
-
+    print("This is the sequence after encoding: ",aatype_list)
     aatype = collate_dense_tensors(aatype_list)
+    print("This is the sequence after stacking: ",aatype)
     mask = collate_dense_tensors(
         [aatype.new_ones(len(aatype_seq)) for aatype_seq in aatype_list]
     )
+    print("Get prepared for the mask (initialization): ",mask)
     residx = collate_dense_tensors(residx_list)
     linker_mask = collate_dense_tensors(linker_mask_list)
     chain_index_list = collate_dense_tensors(chain_index_list, -1)
@@ -115,7 +119,7 @@ def output_to_pdb(output: T.Dict) -> T.List[str]:
         pdbs.append(to_pdb(pred))
     return pdbs
 
-
+#JO: try to stack the tensors in the sample list into a single tensor, also make sure they are the same shape
 def collate_dense_tensors(
     samples: T.List[torch.Tensor], pad_v: float = 0
 ) -> torch.Tensor:

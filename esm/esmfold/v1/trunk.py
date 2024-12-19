@@ -133,7 +133,7 @@ class FoldingTrunk(nn.Module):
                     sequence_head_width=self.cfg.sequence_head_width,
                     pairwise_head_width=self.cfg.pairwise_head_width,
                     # dropout=self.cfg.dropout,
-                    dropout=0.3,
+                    dropout=0.15,
                 )
                 for i in range(self.cfg.num_blocks)
             ]
@@ -145,7 +145,7 @@ class FoldingTrunk(nn.Module):
         self.recycle_disto = nn.Embedding(self.recycle_bins, c_z)
         self.recycle_disto.weight[0].detach().zero_()
         #JO: Test
-        # self.cfg.structure_module.dropout_rate = 0.0
+        self.cfg.structure_module.dropout_rate = 0.2
         self.structure_module = StructureModule(**self.cfg.structure_module)  # type: ignore
         print(self.cfg.structure_module)
         self.trunk2sm_s = nn.Linear(c_s, self.structure_module.c_s)
