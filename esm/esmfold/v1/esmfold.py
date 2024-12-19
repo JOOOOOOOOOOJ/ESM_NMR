@@ -99,6 +99,7 @@ class ESMFold(nn.Module):
         return torch.tensor(esm_reorder)
 
     def _af2_idx_to_esm_idx(self, aa, mask):
+        #JO: This is where the masking takes effect, but it is not defined by me
         aa = (aa + 1).masked_fill(mask != 1, 0)
         return self.af2_to_esm[aa]
 
@@ -167,10 +168,11 @@ class ESMFold(nn.Module):
 
         # === ESM ===
         esmaa = self._af2_idx_to_esm_idx(aa, mask)
-
+        print(esmaa)
         if masking_pattern is not None:
+            #JO: make the index at the position of masking pattern to be the mask index, this is what we defined
             esmaa = self._mask_inputs_to_esm(esmaa, masking_pattern)
-
+        print(esmaa)
         esm_s = self._compute_language_model_representations(esmaa)
 
         # Convert esm_s to the precision used by the trunk and
@@ -276,7 +278,11 @@ class ESMFold(nn.Module):
         """
         if isinstance(sequences, str):
             sequences = [sequences]
-        #JO: aatype is the stacked encoded sequences, and mask is the initialized mask just the same shaoe as aatype
+        '''
+        JO: aatype is the stacked encoded sequences, and mask is the initialized mask just the same shaoe as aatype
+        The code is the number of amino acid
+        Since there are no multimers, the stack and the mask have no functions
+        '''
         aatype, mask, _residx, linker_mask, chain_index = batch_encode_sequences(
             sequences, residue_index_offset, chain_linker
         )
