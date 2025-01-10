@@ -117,7 +117,7 @@ def output_to_pdb(output: T.Dict) -> T.List[str]:
             chain_index=output["chain_index"][i] if "chain_index" in output else None,
         )
         pdbs.append(to_pdb(pred))
-    return pdbs
+    return pdbs, final_atom_positions
 
 #JO: try to stack the tensors in the sample list into a single tensor, also make sure they are the same shape
 def collate_dense_tensors(

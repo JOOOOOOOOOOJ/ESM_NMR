@@ -175,7 +175,7 @@ class ESMFold(nn.Module):
         print("After adding the masking patterns inside ",esmaa)
         #JO: get the representation of the sequence: B, L, nLayers, C
         esm_s = self._compute_language_model_representations(esmaa)
-
+        print("Representation of the sequence ",esm_s)
         # Convert esm_s to the precision used by the trunk and
         # the structure module. These tensors may be a lower precision if, for example,
         # we're running the language model in fp16 precision.
@@ -185,11 +185,13 @@ class ESMFold(nn.Module):
 
         # === preprocessing ===
         esm_s = (self.esm_s_combine.softmax(0).unsqueeze(0) @ esm_s).squeeze(2)
-
+        print("After combining the ESM representations ",esm_s)
         s_s_0 = self.esm_s_mlp(esm_s)
         s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
 
         s_s_0 += self.embedding(aa)
+        print("After adding the embedding ",s_s_0)
+        print("After adding the embedding ",s_z_0)
         #JO: This is the last mask here in esmfold
         structure: dict = self.trunk(
             s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
@@ -234,7 +236,7 @@ class ESMFold(nn.Module):
         structure["lddt_head"] = lddt_head
         plddt = categorical_lddt(lddt_head[-1], bins=self.lddt_bins)
         structure["plddt"] = 100 * plddt  # we predict plDDT between 0 and 1, scale to be between 0 and 100.
-
+        #JO: If I can get to know what each dimention of lddt_head is, I can understand the model better
         ptm_logits = self.ptm_head(structure["s_z"])
 
         seqlen = mask.type(torch.int64).sum(1)
