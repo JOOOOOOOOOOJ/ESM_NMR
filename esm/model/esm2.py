@@ -47,7 +47,7 @@ class ESM2(nn.Module):
 
     def _init_submodules(self):
         self.embed_scale = 1
-        #JO: embedding layer is the number of tokens in the alphabet, make sense
+        #JO: It's a dictionary here, but the weight from pre-trained model has not been loaded
         self.embed_tokens = nn.Embedding(
             self.alphabet_size,
             self.embed_dim,
@@ -90,8 +90,11 @@ class ESM2(nn.Module):
         padding_mask = tokens.eq(self.padding_idx)  # B, T
 
         x = self.embed_scale * self.embed_tokens(tokens)
-
+        #JO: True in config, but this dropout is not disgarding the value
         if self.token_dropout:
+            '''
+            JOJO: Here the mask idx is replaced by 0
+            '''
             x.masked_fill_((tokens == self.mask_idx).unsqueeze(-1), 0.0)
             # x: B x T x C
             mask_ratio_train = 0.15 * 0.8

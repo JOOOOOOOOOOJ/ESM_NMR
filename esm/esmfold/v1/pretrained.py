@@ -53,9 +53,17 @@ def _load_model(model_name):
         print(f"Loading downloaded model: {downloaded_file}")
         # torch.serialization.add_safe_globals([str(downloaded_file)])
         model_data = torch.load(str(downloaded_file), map_location="cpu", mmap=True)
+    '''
+    JOJO: cfg and model_state are the most important information got from pretrained model.
+    Get all the parameters needed for folding trunk (like everything shown in trunk.py Folding
+    Trunk Config and Structure Module Config)
+    '''
     cfg = model_data["cfg"]["model"]
     print("woshisb")
     model_state = model_data["model"]
+    '''
+    JOJO: Here is the place ESMFold is loaded.
+    '''
     model = ESMFold(esmfold_config=cfg)
     expected_keys = set(model.state_dict().keys())
     found_keys = set(model_state.keys())

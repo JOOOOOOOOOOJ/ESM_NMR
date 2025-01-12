@@ -31,7 +31,9 @@ class StructureModuleConfig:
     epsilon: float = 1e-8
     inf: float = 1e5
 
-
+"""
+JOJO: Folding Trunk Config has higher superiority than Structure Module Config
+"""
 @dataclass
 class FoldingTrunkConfig:
     _name: str = "FoldingTrunkConfig"

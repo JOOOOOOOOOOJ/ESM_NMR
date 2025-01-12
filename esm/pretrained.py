@@ -260,7 +260,10 @@ def load_model_and_alphabet_core(model_name, model_data, regression_data=None):
             warnings.warn(
                 "Regression weights not found, predicting contacts will not produce correct results."
             )
-
+    '''
+    JOJO: Load the model state dict, they are about weights and biases deposited in the pretrained model (.pt)
+    file. And the config file is about some basic shapes of representations and embeddings
+    '''
     model.load_state_dict(model_state, strict=regression_data is not None)
 
     return model, alphabet

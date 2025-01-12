@@ -30,7 +30,7 @@ class ESMFoldConfig:
     trunk: T.Any = FoldingTrunkConfig()
     lddt_head_hid_dim: int = 128
 
-
+ 
 class ESMFold(nn.Module):
     def __init__(self, esmfold_config=None, **kwargs):
         super().__init__()
@@ -39,7 +39,7 @@ class ESMFold(nn.Module):
         cfg = self.cfg
 
         self.distogram_bins = 64
-        #JO: they are esm2 model and alphabet separately
+        #JO: they are esm2 model (include model shapes, weights and biaes ...) and alphabet separately
         self.esm, self.esm_dict = esm.pretrained.esm2_t36_3B_UR50D()
         #JO: freeze the model
         self.esm.requires_grad_(False)
@@ -48,15 +48,20 @@ class ESMFold(nn.Module):
 
         #JO: data from config
         self.esm_feats = self.esm.embed_dim
+        print('ESM2 Embedding Dimention:\n',self.esm_feats)
         self.esm_attns = self.esm.num_layers * self.esm.attention_heads
+        print('ESM2 Attention Heads:\n',self.esm.attention_heads)
+        print('ESM2 Layers:\n',self.esm.num_layers)
         #JO: register a tensor as a buffer, it is not a parameter
         self.register_buffer("af2_to_esm", ESMFold._af2_to_esm(self.esm_dict))
         self.esm_s_combine = nn.Parameter(torch.zeros(self.esm.num_layers + 1))
 
-        #JO: look like AF architecture
+        #JO: This is for folding trunk
         c_s = cfg.trunk.sequence_state_dim
         c_z = cfg.trunk.pairwise_state_dim
-
+        print("folding trunk sequence_state_dim:\n",c_s)
+        print("folding trunk pairwise_state_dim:\n",c_z)
+        #JO: This is the Feed Neural Network for Transformer
         self.esm_s_mlp = nn.Sequential(
             LayerNorm(self.esm_feats),
             nn.Linear(self.esm_feats, c_s),
@@ -64,7 +69,7 @@ class ESMFold(nn.Module):
             nn.Linear(c_s, c_s),
         )
 
-        # 0 is padding, N is unknown residues, N + 1 is mask.
+        # 0 is padding, N is unknown residues, N + 1 is mask. n_tokens_embed is the number of indexes
         self.n_tokens_embed = residue_constants.restype_num + 3
         self.pad_idx = 0
         self.unk_idx = self.n_tokens_embed - 2
@@ -75,7 +80,7 @@ class ESMFold(nn.Module):
         c_s: size of each embedding vector
         '''
         self.embedding = nn.Embedding(self.n_tokens_embed, c_s, padding_idx=0)
-
+        #JO: folding trunk has triangular attention blocks inside
         self.trunk = FoldingTrunk(**cfg.trunk)
 
         self.distogram_head = nn.Linear(c_z, self.distogram_bins)
@@ -115,7 +120,7 @@ class ESMFold(nn.Module):
         esmaa = torch.cat([bos, esmaa, eos], dim=1)
         # Use the first padding index as eos during inference.
         esmaa[range(batch_size), (esmaa != 1).sum(1)] = eosi
-        #JO: use the pretrained model to get the representation
+        #JO: use the pretrained model to get the representation, this is the results after all the esm calculations
         res = self.esm(
             esmaa,
             repr_layers=range(self.esm.num_layers + 1),
@@ -127,6 +132,7 @@ class ESMFold(nn.Module):
         esm_s = esm_s[:, 1:-1]  # B, L, nLayers, C
         return esm_s
 
+    #JO: Change masked position to special index
     def _mask_inputs_to_esm(self, esmaa, pattern):
         new_esmaa = esmaa.clone()
         new_esmaa[pattern == 1] = self.esm_dict.mask_idx
@@ -158,7 +164,7 @@ class ESMFold(nn.Module):
 
         if mask is None:
             mask = torch.ones_like(aa)
-        #JO: So B is the number of token we get from initial sequence
+        #JO: So B is tthe number of batch, which is usually 1 for monomer
         B = aa.shape[0]
         L = aa.shape[1]
         device = aa.device
@@ -175,7 +181,7 @@ class ESMFold(nn.Module):
         print("After adding the masking patterns inside ",esmaa)
         #JO: get the representation of the sequence: B, L, nLayers, C
         esm_s = self._compute_language_model_representations(esmaa)
-        print("Representation of the sequence ",esm_s)
+        print("Shape of the result of ESM2 calculation",esm_s.shape)
         # Convert esm_s to the precision used by the trunk and
         # the structure module. These tensors may be a lower precision if, for example,
         # we're running the language model in fp16 precision.
@@ -185,13 +191,12 @@ class ESMFold(nn.Module):
 
         # === preprocessing ===
         esm_s = (self.esm_s_combine.softmax(0).unsqueeze(0) @ esm_s).squeeze(2)
-        print("After combining the ESM representations ",esm_s)
+        print("After combination, shape of the result of ESM2 calculation",esm_s.shape)
         s_s_0 = self.esm_s_mlp(esm_s)
         s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
 
         s_s_0 += self.embedding(aa)
-        print("After adding the embedding ",s_s_0)
-        print("After adding the embedding ",s_z_0)
+        print("After adding the embedding, s_s_0: ",s_s_0)
         #JO: This is the last mask here in esmfold
         structure: dict = self.trunk(
             s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
