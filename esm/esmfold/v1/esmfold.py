@@ -82,7 +82,9 @@ class ESMFold(nn.Module):
         self.embedding = nn.Embedding(self.n_tokens_embed, c_s, padding_idx=0)
         #JO: folding trunk has triangular attention blocks inside
         self.trunk = FoldingTrunk(**cfg.trunk)
-
+        '''
+        JOJO: linear layer is a way to digest information and transfer it to the desired dimentions
+        '''
         self.distogram_head = nn.Linear(c_z, self.distogram_bins)
         self.ptm_head = nn.Linear(c_z, self.distogram_bins)
         self.lm_head = nn.Linear(c_s, self.n_tokens_embed)
@@ -192,6 +194,10 @@ class ESMFold(nn.Module):
         # === preprocessing ===
         esm_s = (self.esm_s_combine.softmax(0).unsqueeze(0) @ esm_s).squeeze(2)
         print("After combination, shape of the result of ESM2 calculation",esm_s.shape)
+
+        return esm_s, aa, B, L, residx, mask, num_recycles
+    
+    def get_structure(self, esm_s, aa, B, L, residx, mask, num_recycles):
         s_s_0 = self.esm_s_mlp(esm_s)
         s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
 
@@ -304,7 +310,7 @@ class ESMFold(nn.Module):
             lambda x: x.to(self.device), (aatype, mask, residx, linker_mask)
         )
 
-        output = self.forward(
+        esm_s, aa, B, L, residx, mask, num_recycles = self.forward(
             aatype,
             mask=mask,
             residx=residx,
@@ -312,6 +318,10 @@ class ESMFold(nn.Module):
             num_recycles=num_recycles,
         )
 
+        return esm_s, aa, B, L, residx, mask, num_recycles, linker_mask, chain_index
+    
+    def infer_structure(self, esm_s, aa, B, L, residx, mask, num_recycles, linker_mask, chain_index):
+        output = self.get_structure(esm_s, aa, B, L, residx, mask, num_recycles)
         output["atom37_atom_exists"] = output[
             "atom37_atom_exists"
         ] * linker_mask.unsqueeze(2)
