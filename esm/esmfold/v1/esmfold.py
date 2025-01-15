@@ -32,6 +32,7 @@ class ESMFoldConfig:
 
  
 class ESMFold(nn.Module):
+    #JO: It can accept other parameters, but now actually only accept config from esmfold_3B_v1.pt
     def __init__(self, esmfold_config=None, **kwargs):
         super().__init__()
 
@@ -39,51 +40,60 @@ class ESMFold(nn.Module):
         cfg = self.cfg
 
         self.distogram_bins = 64
-        #JO: they are esm2 model (include model shapes, weights and biaes ...) and alphabet separately
+        #JO: they are esm2 model (include model shapes, weights and bias ...) and alphabet separately
         self.esm, self.esm_dict = esm.pretrained.esm2_t36_3B_UR50D()
         #JO: freeze the model
         self.esm.requires_grad_(False)
         #JO: half the model, float32 to float16
         self.esm.half()
 
-        #JO: data from config
+        #JO: It really looks like the msa_feats. It's embeddings and has 'feats' in the name. The value is 2560
         self.esm_feats = self.esm.embed_dim
         print('ESM2 Embedding Dimention:\n',self.esm_feats)
+        #JO: attention_heads is 40, num_layers is 36
         self.esm_attns = self.esm.num_layers * self.esm.attention_heads
         print('ESM2 Attention Heads:\n',self.esm.attention_heads)
         print('ESM2 Layers:\n',self.esm.num_layers)
         #JO: register a tensor as a buffer, it is not a parameter
+        print("esm_dict (alphabet from esm2):", self.esm_dict)
+        #JO: the reordered index can be referred to as af2_to_esm
         self.register_buffer("af2_to_esm", ESMFold._af2_to_esm(self.esm_dict))
         self.esm_s_combine = nn.Parameter(torch.zeros(self.esm.num_layers + 1))
 
-        #JO: This is for folding trunk
+        #JO: This is for folding trunk, sequence dimention is 1024, pairwise dimention is 128
         c_s = cfg.trunk.sequence_state_dim
         c_z = cfg.trunk.pairwise_state_dim
         print("folding trunk sequence_state_dim:\n",c_s)
         print("folding trunk pairwise_state_dim:\n",c_z)
         #JO: This is the Feed Neural Network for Transformer
         self.esm_s_mlp = nn.Sequential(
+            #JO: Normalize over the last dimention and it should be the same as embedding dimention 2560
+            #JO: Here the weights and bias are learnable
             LayerNorm(self.esm_feats),
             nn.Linear(self.esm_feats, c_s),
+            #JO: ReLU is a non-linear activation function, suitable for complex relationships and also the 
+            #JO: gradient is not vanishing
             nn.ReLU(),
             nn.Linear(c_s, c_s),
         )
 
-        # 0 is padding, N is unknown residues, N + 1 is mask. n_tokens_embed is the number of indexes
+        #JO: 0 is padding, N - 1 is unknown residues, N is mask. n_tokens_embed is the number of indexes
+        #JO: The left residues are already defined in function: _af2_to_esm()
         self.n_tokens_embed = residue_constants.restype_num + 3
         self.pad_idx = 0
         self.unk_idx = self.n_tokens_embed - 2
         self.mask_idx = self.n_tokens_embed - 1
         '''
-        JO: self.n_tokens_embed is size of the dictionary of embeddings
-        number of tokens in the dictionary
-        c_s: size of each embedding vector
+        JO: So the sequence dimention is selected as the embedding size
+        The weights are learnable and applys to the normalized distribution. It has the same dimention 
+        as the embedding. padding_idx is to make sure the size of each input to embedding is the same, but 
+        hope it will have no influence on the result, so it is set to 0 and not updated during training
         '''
         self.embedding = nn.Embedding(self.n_tokens_embed, c_s, padding_idx=0)
-        #JO: folding trunk has triangular attention blocks inside
+        #JO: folding trunk has triangular attention blocks inside, '**' is to discompose the dictionary
         self.trunk = FoldingTrunk(**cfg.trunk)
         '''
-        JOJO: linear layer is a way to digest information and transfer it to the desired dimentions
+        JOJO: I would expect these layers to help analyze outputs from esm2
         '''
         self.distogram_head = nn.Linear(c_z, self.distogram_bins)
         self.ptm_head = nn.Linear(c_z, self.distogram_bins)
@@ -96,6 +106,7 @@ class ESMFold(nn.Module):
             nn.Linear(cfg.lddt_head_hid_dim, 37 * self.lddt_bins),
         )
 
+    #JO: Static method has no relationship with the instance of the class. It is just a function inside the class
     @staticmethod
     #JO: attribute index to each token in esmfold according to the alphabet in esm2
     def _af2_to_esm(d: Alphabet):
@@ -103,6 +114,7 @@ class ESMFold(nn.Module):
         esm_reorder = [d.padding_idx] + [
             d.get_idx(v) for v in residue_constants.restypes_with_x
         ]
+        print("reordered esm:", esm_reorder)
         return torch.tensor(esm_reorder)
 
     def _af2_idx_to_esm_idx(self, aa, mask):
@@ -117,11 +129,16 @@ class ESMFold(nn.Module):
         batch_size = esmaa.size(0)
 
         bosi, eosi = self.esm_dict.cls_idx, self.esm_dict.eos_idx
+        print("BOS and EOS index in esm2:", bosi, eosi)
+        #JO: Size is (B, 1), and fill the tensor with bosi. So add bos token to the beginning of each sequence
+        #JO: Add eos token to the end of each sequence
         bos = esmaa.new_full((batch_size, 1), bosi)
+        #JO: Does this begin to add padding?
         eos = esmaa.new_full((batch_size, 1), self.esm_dict.padding_idx)
         esmaa = torch.cat([bos, esmaa, eos], dim=1)
         # Use the first padding index as eos during inference.
         esmaa[range(batch_size), (esmaa != 1).sum(1)] = eosi
+        print("What esmaa looks like after adding bos, padding and eos:", esmaa)
         #JO: use the pretrained model to get the representation, this is the results after all the esm calculations
         res = self.esm(
             esmaa,
@@ -138,6 +155,7 @@ class ESMFold(nn.Module):
     def _mask_inputs_to_esm(self, esmaa, pattern):
         new_esmaa = esmaa.clone()
         new_esmaa[pattern == 1] = self.esm_dict.mask_idx
+        print("Mask_idx is: ", self.esm_dict.mask_idx)
         return new_esmaa
 
     #JO: aa here is the input sequence
@@ -166,9 +184,12 @@ class ESMFold(nn.Module):
 
         if mask is None:
             mask = torch.ones_like(aa)
-        #JO: So B is tthe number of batch, which is usually 1 for monomer
-        B = aa.shape[0]
-        L = aa.shape[1]
+        '''
+        #JO: So B is tthe number of batch, which is usually 1 for monomer, but considering that batch is usually used
+        to adapt calculation to GPUs. I would take B here as the batch before chunking
+        '''
+        B = aa.shape[0] #JO: batch size
+        L = aa.shape[1] #JO: sequence length
         device = aa.device
 
         if residx is None:
@@ -176,7 +197,7 @@ class ESMFold(nn.Module):
 
         # === ESM ===
         esmaa = self._af2_idx_to_esm_idx(aa, mask)
-        print("After using ESM tokens ",esmaa)
+        print("After adding padding idx and transfer amino acid to idx (Also make the idx start from 1):",esmaa)
         if masking_pattern is not None:
             #JO: make the index at the position of masking pattern to be the mask index, this is what we defined
             esmaa = self._mask_inputs_to_esm(esmaa, masking_pattern)
@@ -266,6 +287,7 @@ class ESMFold(nn.Module):
 
     @torch.no_grad()
     def infer(
+        #JO: Optional means the parameter can be None, Union means the parameter can be either of the types
         self,
         sequences: T.Union[str, T.List[str]],
         residx=None,
@@ -293,9 +315,11 @@ class ESMFold(nn.Module):
         if isinstance(sequences, str):
             sequences = [sequences]
         '''
-        JO: aatype is the stacked encoded sequences, and mask is the initialized mask just the same shaoe as aatype
-        The code is the number of amino acid
-        Since there are no multimers, the stack and the mask have no functions
+        JOJO: aatype is the stacked encoded sequences (amino acid in each position in a list, but have been encoded
+        according to openfold residue_constants.restype_order_with_x.get), 
+        and mask is the initialized mask just the same shape as aatype (all is one)
+        residx is the number of index of residues, linker_mask and chain_index does not make a big
+        difference in the monomer case
         '''
         aatype, mask, _residx, linker_mask, chain_index = batch_encode_sequences(
             sequences, residue_index_offset, chain_linker
@@ -309,7 +333,9 @@ class ESMFold(nn.Module):
         aatype, mask, residx, linker_mask = map(
             lambda x: x.to(self.device), (aatype, mask, residx, linker_mask)
         )
-
+        print("aatype before input into forward function:", aatype)
+        print("B is its first dimention, L is its second dimention")
+        print("mask before input into forward function, which should be all one:", mask)
         esm_s, aa, B, L, residx, mask, num_recycles = self.forward(
             aatype,
             mask=mask,

@@ -70,7 +70,8 @@ def batch_encode_sequences(
     chain_index_list = []
     print("This is sequence just after input: ", sequences)
     for seq in sequences:
-        #JO: get sequence encoded according to the types defined before
+        #JO: aatype_seq is the sequence put into list, residx_seq is the residue index, 
+        #JO: linker_mask_seq and chain_index_seq are almost nothing in monomer case
         aatype_seq, residx_seq, linker_mask_seq, chain_index_seq = encode_sequence(
             seq,
             residue_index_offset=residue_index_offset,

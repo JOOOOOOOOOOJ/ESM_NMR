@@ -59,7 +59,6 @@ def _load_model(model_name):
     Trunk Config and Structure Module Config)
     '''
     cfg = model_data["cfg"]["model"]
-    print("woshisb")
     model_state = model_data["model"]
     '''
     JOJO: Here is the place ESMFold is loaded.
@@ -74,7 +73,11 @@ def _load_model(model_name):
 
     if missing_essential_keys:
         raise RuntimeError(f"Keys '{', '.join(missing_essential_keys)}' are missing.")
-
+    
+    '''
+    JOJO: At this point, all the weights and bias are loaded into the model.
+    Then it's ready to use
+    '''
     model.load_state_dict(model_state, strict=False)
 
     return model
