@@ -69,6 +69,7 @@ class ESMFold(nn.Module):
         self.esm_s_mlp = nn.Sequential(
             #JO: Normalize over the last dimention and it should be the same as embedding dimention 2560
             #JO: Here the weights and bias are learnable
+            #JO: size of esm_feats is C, and here is to transfer the representation to folding trunk size
             LayerNorm(self.esm_feats),
             nn.Linear(self.esm_feats, c_s),
             #JO: ReLU is a non-linear activation function, suitable for complex relationships and also the 
@@ -217,7 +218,7 @@ class ESMFold(nn.Module):
         # we're running the language model in fp16 precision.
         esm_s = esm_s.to(self.esm_s_combine.dtype)
         #JO: In order to make loss function work, I need to comment this step
-        #esm_s = esm_s.detach()
+        esm_s = esm_s.detach()
 
         # === preprocessing ===
         #JO: Here the esm_s_combine is all 0 and shape is (nlayer + 1), so after softmax it just becomes average weights
@@ -230,6 +231,7 @@ class ESMFold(nn.Module):
         return esm_s, aa, B, L, residx, mask, num_recycles
     
     def get_structure(self, esm_s, aa, B, L, residx, mask, num_recycles):
+        #JO: Norm -> Linear -> ReLU -> Linear, output shape is (B, L, CS)
         s_s_0 = self.esm_s_mlp(esm_s)
         s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
 
