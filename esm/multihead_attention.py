@@ -79,24 +79,28 @@ class MultiheadAttention(nn.Module):
         vdim=None,
         dropout=0.0,
         bias=True,
-        add_bias_kv: bool = False,
-        add_zero_attn: bool = False,
+        add_bias_kv: bool = False, #JO: False
+        add_zero_attn: bool = False, #JO: False
         self_attention: bool = False,
         encoder_decoder_attention: bool = False,
-        use_rotary_embeddings: bool = False,
+        use_rotary_embeddings: bool = False, #JO: True
     ):
         super().__init__()
         self.embed_dim = embed_dim
+        #JO: The dimention of key and value will be the same as embeddings, plus query
         self.kdim = kdim if kdim is not None else embed_dim
         self.vdim = vdim if vdim is not None else embed_dim
         self.qkv_same_dim = self.kdim == embed_dim and self.vdim == embed_dim
 
         self.num_heads = num_heads
+        #JO: Maybe the only dropout in ESM2
         self.dropout = dropout
+        #JO: Head dimention is the dimention of the embeddings divided by the number of heads
         self.head_dim = embed_dim // num_heads
         assert (
             self.head_dim * num_heads == self.embed_dim
         ), "embed_dim must be divisible by num_heads"
+        #JO: This very famous scaling factor
         self.scaling = self.head_dim**-0.5
 
         self.self_attention = self_attention
@@ -119,11 +123,12 @@ class MultiheadAttention(nn.Module):
             self.bias_k = self.bias_v = None
 
         self.add_zero_attn = add_zero_attn
-
+        #JO: This step help initialize the weights of k,q,v projections
         self.reset_parameters()
 
         self.onnx_trace = False
         self.rot_emb = None
+        #JO: This rotary embedding is used to make use of rotation to encode the relative position of the tokens
         if use_rotary_embeddings:
             self.rot_emb = RotaryEmbedding(dim=self.head_dim)
 
@@ -156,6 +161,7 @@ class MultiheadAttention(nn.Module):
         if self.bias_v is not None:
             nn.init.xavier_normal_(self.bias_v)
 
+    #Q, K, V here are all x, the input sequence of vectors
     def forward(
         self,
         query,
@@ -189,12 +195,12 @@ class MultiheadAttention(nn.Module):
         if need_head_weights:
             need_weights = True
 
-        tgt_len, bsz, embed_dim = query.size()
+        tgt_len, bsz, embed_dim = query.size() #JO: (L, B, C)
         assert embed_dim == self.embed_dim
         assert list(query.size()) == [tgt_len, bsz, embed_dim]
 
         if (
-            not self.rot_emb
+            not self.rot_emb #JO: True
             and self.enable_torch_version
             and not self.onnx_trace
             and incremental_state is None
@@ -228,7 +234,7 @@ class MultiheadAttention(nn.Module):
                 k_proj_weight=self.k_proj.weight,
                 v_proj_weight=self.v_proj.weight,
             )
-        if incremental_state is not None:
+        if incremental_state is not None: #JO: None
             saved_state = self._get_input_buffer(incremental_state)
             if saved_state is not None and "prev_key" in saved_state:
                 # previous time steps are cached - no need to recompute
@@ -239,11 +245,11 @@ class MultiheadAttention(nn.Module):
         else:
             saved_state = None
 
-        if self.self_attention:
+        if self.self_attention: #JO: False
             q = self.q_proj(query)
             k = self.k_proj(query)
             v = self.v_proj(query)
-        elif self.encoder_decoder_attention:
+        elif self.encoder_decoder_attention: #JO: False
             # encoder-decoder attention
             q = self.q_proj(query)
             if key is None:
@@ -255,12 +261,13 @@ class MultiheadAttention(nn.Module):
 
         else:
             assert key is not None and value is not None
+            #JO: Do linear projection to query, key and value (C -> C)
             q = self.q_proj(query)
             k = self.k_proj(key)
             v = self.v_proj(value)
         q *= self.scaling
 
-        if self.bias_k is not None:
+        if self.bias_k is not None: #JO: None
             assert self.bias_v is not None
             k = torch.cat([k, self.bias_k.repeat(1, bsz, 1)])
             v = torch.cat([v, self.bias_v.repeat(1, bsz, 1)])
@@ -276,14 +283,17 @@ class MultiheadAttention(nn.Module):
                     ],
                     dim=1,
                 )
-
+        #JO: Divide the (L, B, C) to (L, B*N, H) and then transpose to (B*N, L, H), N * H = C
+        #JO: Now B*N is the real batch size
+        #JO: view is a good way to change the shape of matrix。 This reshape is to make batches
+        #JO: Q, K ,V have the same operation
         q = q.contiguous().view(tgt_len, bsz * self.num_heads, self.head_dim).transpose(0, 1)
         if k is not None:
             k = k.contiguous().view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
         if v is not None:
             v = v.contiguous().view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
 
-        if saved_state is not None:
+        if saved_state is not None: #JO: None
             # saved states are stored with shape (bsz, num_heads, seq_len, head_dim)
             if "prev_key" in saved_state:
                 _prev_key = saved_state["prev_key"]
@@ -322,6 +332,7 @@ class MultiheadAttention(nn.Module):
             assert incremental_state is not None
             incremental_state = self._set_input_buffer(incremental_state, saved_state)
         assert k is not None
+        #JOL k.size(1) is L
         src_len = k.size(1)
 
         # This is part of a workaround to get around fork/join parallelism
@@ -333,7 +344,7 @@ class MultiheadAttention(nn.Module):
             assert key_padding_mask.size(0) == bsz
             assert key_padding_mask.size(1) == src_len
 
-        if self.add_zero_attn:
+        if self.add_zero_attn: #JO: False
             assert v is not None
             src_len += 1
             k = torch.cat([k, k.new_zeros((k.size(0), 1) + k.size()[2:])], dim=1)
@@ -350,16 +361,20 @@ class MultiheadAttention(nn.Module):
                     ],
                     dim=1,
                 )
-
+        #JO: here do rotation embedding to Q and K to add the relative position information
+        #JO: though q and k is input together, they have no interaction
         if self.rot_emb:
             q, k = self.rot_emb(q, k)
 
+        #JO: Here the Q and K is multiplied to get the attention weights
+        #JO: Shape is [B*N, Lq, Lk]
         attn_weights = torch.bmm(q, k.transpose(1, 2))
+        #JO: Nothing has been done here and it's worth noting that tat_len belongs to query and src_len belongs to key
+        #JO: Though the shape is the same
         attn_weights = MultiheadAttention.apply_sparse_mask(attn_weights, tgt_len, src_len, bsz)
-
         assert list(attn_weights.size()) == [bsz * self.num_heads, tgt_len, src_len]
 
-        if attn_mask is not None:
+        if attn_mask is not None: #JO: None and question here is even I have mask, it is not import to the transformer layers
             attn_mask = attn_mask.unsqueeze(0)
             if self.onnx_trace:
                 attn_mask = attn_mask.repeat(attn_weights.size(0), 1, 1)
@@ -367,23 +382,28 @@ class MultiheadAttention(nn.Module):
 
         if key_padding_mask is not None:
             # don't attend to padding symbols
+            #JO: change shape from (B*N, Lq, Lk) to (B, N, Lq, Lk)
             attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
+            #JO: The mask is targeted to key length, masking specific positions
             attn_weights = attn_weights.masked_fill(
                 key_padding_mask.unsqueeze(1).unsqueeze(2).to(torch.bool), float("-inf")
             )
+            #JO: Change the shape back to (B*N, Lq, Lk)
             attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
 
-        if before_softmax:
+        if before_softmax: #JO: False
             return attn_weights, v
-
+        #JO: Do softmax to the last dimention of the attention weights, which correpsonds to the key length
         attn_weights_float = utils_softmax(attn_weights, dim=-1, onnx_trace=self.onnx_trace)
         attn_weights = attn_weights_float.type_as(attn_weights)
+        #JO: Dropout is 0
         attn_probs = F.dropout(
             attn_weights_float.type_as(attn_weights),
             p=self.dropout,
             training=self.training,
         )
         assert v is not None
+        #JO: attn shape (B*N, L, H)
         attn = torch.bmm(attn_probs, v)
         assert list(attn.size()) == [bsz * self.num_heads, tgt_len, self.head_dim]
         if self.onnx_trace and attn.size(1) == 1:
@@ -391,13 +411,16 @@ class MultiheadAttention(nn.Module):
             # the transpose is a no-op copy before view, thus unnecessary
             attn = attn.contiguous().view(tgt_len, bsz, embed_dim)
         else:
+            #JO: Change shape back to (L, B, C)
             attn = attn.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
+        #JO: Another linear projection (B, L, C) -> (B, L, C)
         attn = self.out_proj(attn)
         attn_weights: Optional[Tensor] = None
-        if need_weights:
-            attn_weights = attn_weights_float.view(
+        if need_weights: #JO: True
+            attn_weights = attn_weights_float.view( 
                 bsz, self.num_heads, tgt_len, src_len
             ).type_as(attn).transpose(1, 0)
+        #JO: The attn_weights's shape becomes (N, B, L, L)
             if not need_head_weights:
                 # average attention weights over heads
                 attn_weights = attn_weights.mean(dim=0)

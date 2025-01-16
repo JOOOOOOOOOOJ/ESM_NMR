@@ -20,6 +20,12 @@ class ESM2(nn.Module):
         alphabet: Union[esm.data.Alphabet, str] = "ESM-1b",
         token_dropout: bool = True,
     ):
+        print("Number of layers used in ESM2 initialization: ", num_layers)
+        print("It's also the number of Transformer layers")
+        print("Embedding dimension used in ESM2 initialization: ", embed_dim)
+        print("Number of attention heads used in ESM2 initialization: ", attention_heads)
+        print("Alphabet used in ESM2 initialization: ", alphabet)
+        print("Token dropout used in ESM2 initialization: ", token_dropout)
         super().__init__()
         self.num_layers = num_layers
         self.embed_dim = embed_dim
@@ -36,6 +42,7 @@ class ESM2(nn.Module):
         #JOJO: beginning  and end of sequence tokens
         self.prepend_bos = alphabet.prepend_bos
         self.append_eos = alphabet.append_eos
+        print("Padding index, mask index, cls index, eos index used in ESM2 alphabet: ", self.padding_idx, self.mask_idx, self.cls_idx, self.eos_idx)
         ''' 
         JOJO's Question:
         what kind of influence will the token_dropout have on the model?
@@ -47,13 +54,15 @@ class ESM2(nn.Module):
 
     def _init_submodules(self):
         self.embed_scale = 1
-        #JO: It's a dictionary here, but the weight from pre-trained model has not been loaded
+        #JO: It's a dictionary here, and the weight from pre-trained model has been loaded
+        #JO: This is the embedding first to make the input sequence into a sequence of vectors
         self.embed_tokens = nn.Embedding(
             self.alphabet_size,
             self.embed_dim,
             padding_idx=self.padding_idx,
         )
         #JO: embed dim and attention heads come from config
+        #JO: Number of Transformer Layer is num_layers
         self.layers = nn.ModuleList(
             [
                 TransformerLayer(
@@ -67,7 +76,7 @@ class ESM2(nn.Module):
                 for _ in range(self.num_layers)
             ]
         )
-        #Use the attention weights to predict contacts
+        #The last three parameters are from alphabet
         self.contact_head = ContactPredictionHead(
             self.num_layers * self.attention_heads,
             self.prepend_bos,
@@ -81,32 +90,42 @@ class ESM2(nn.Module):
             output_dim=self.alphabet_size,
             weight=self.embed_tokens.weight,
         )
-
+    #JO: tokens are the indexes list with bos, padding, eos added
+    #JO: repr_layers is the list from 0 to num_layers including the end (num_layers + 1)
     def forward(self, tokens, repr_layers=[], need_head_weights=False, return_contacts=False):
+        #JO: I think sometime I will need the return contacts
         if return_contacts:
             need_head_weights = True
 
-        assert tokens.ndim == 2
+        assert tokens.ndim == 2 # B, L
+        #JO: generate the padding mask the same size as tokens with position of padding marked as True [1, L]
         padding_mask = tokens.eq(self.padding_idx)  # B, T
 
+        #JO: First step, apply embedding to the tokens, and then apply the scale.
+        #JO: Now the shape of x is [B, L, C], C is the embed_dimention
         x = self.embed_scale * self.embed_tokens(tokens)
         #JO: True in config, but this dropout is not disgarding the value
         if self.token_dropout:
             '''
-            JOJO: Here the mask idx is replaced by 0
+            JOJO: Here the position in token which has mask idx is broadcasted to embedding dimention
+            and set all that dimention to 0
             '''
             x.masked_fill_((tokens == self.mask_idx).unsqueeze(-1), 0.0)
             # x: B x T x C
             mask_ratio_train = 0.15 * 0.8
+            #JO: The true length of the sequence without padding
             src_lengths = (~padding_mask).sum(-1)
             mask_ratio_observed = (tokens == self.mask_idx).sum(-1).to(x.dtype) / src_lengths
+            #JO: Do scaling to x, but I don't very understand the logic here
             x = x * (1 - mask_ratio_train) / (1 - mask_ratio_observed)[:, None, None]
 
+        #JO: Make the padding mask position as 0 (The C dimention is all 0)
         if padding_mask is not None:
             x = x * (1 - padding_mask.unsqueeze(-1).type_as(x))
         #JO: This is the layer that to be extracted
         repr_layers = set(repr_layers)
         hidden_representations = {}
+        #JO: There are num_layer + 1 layers 
         if 0 in repr_layers:
             hidden_representations[0] = x
 
@@ -114,12 +133,15 @@ class ESM2(nn.Module):
             attn_weights = []
 
         # (B, T, E) => (T, B, E)
+        #JO: (B, L, C) => (L, B, C)
         x = x.transpose(0, 1)
 
         if not padding_mask.any():
             padding_mask = None
-
+        #JO: In this loop, the x is updated by the TransformerLayer. There are num_layers layers in total
+        #JO: Here the padding mask takes effect again.
         for layer_idx, layer in enumerate(self.layers):
+            #JO: x shape is (L, B, C) and attn (weights) shape is (N, B, L, L)
             x, attn = layer(
                 x,
                 self_attn_padding_mask=padding_mask,
@@ -127,18 +149,19 @@ class ESM2(nn.Module):
             )
             if (layer_idx + 1) in repr_layers:
                 hidden_representations[layer_idx + 1] = x.transpose(0, 1)
+            #JO: So the hidden representations are the results of each layer, shape is (B, L, C)
             if need_head_weights:
                 # (H, B, T, T) => (B, H, T, T)
                 attn_weights.append(attn.transpose(1, 0))
 
         x = self.emb_layer_norm_after(x)
-        x = x.transpose(0, 1)  # (T, B, E) => (B, T, E)
+        x = x.transpose(0, 1)  # (T, B, E) => (B, T, E) #JO: The shape of x is (B, L, C)
 
         # last hidden representation should have layer norm applied
         if (layer_idx + 1) in repr_layers:
             hidden_representations[layer_idx + 1] = x
         x = self.lm_head(x)
-
+        #JO: The Shape of x is (B, L, A), A is the alphabet size
         result = {"logits": x, "representations": hidden_representations}
         if need_head_weights:
             # attentions: B x L x H x T x T

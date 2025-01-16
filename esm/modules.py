@@ -48,6 +48,7 @@ class ESM1LayerNorm(nn.Module):
         self.hidden_size = (hidden_size,) if isinstance(hidden_size, int) else tuple(hidden_size)
         self.eps = eps
         self.affine = bool(affine)
+        #JO: affine = True means using elementwise transformation
         if self.affine:
             #JO: weight and bias, the same size as embed dim
             self.weight = nn.Parameter(torch.ones(hidden_size))
@@ -60,6 +61,7 @@ class ESM1LayerNorm(nn.Module):
         x: The input tensor of shape (N, C, ...) where N is batch size, C is number of channels, and ... is any additional dimensions.
     output:
         x: The normalized output tensor, with the same shape as the input, optionally transformed by learnable parameters (weight and bias).
+    Here the function just the same as Layer Normalization, if affine is True, the output will be multiplied by weight and added by bias.
     '''
     def forward(self, x):
         dims = tuple(-(i + 1) for i in range(len(self.hidden_size)))
@@ -74,7 +76,7 @@ class ESM1LayerNorm(nn.Module):
 
 try:
     from apex.normalization import FusedLayerNorm as _FusedLayerNorm
-
+    #JO: Here the normalization is more complicated.
     class ESM1bLayerNorm(_FusedLayerNorm):
         @torch.jit.unused
         def forward(self, x):
@@ -94,11 +96,11 @@ class TransformerLayer(nn.Module):
     def __init__(
         self,
         embed_dim,
-        ffn_embed_dim, #JO: 1. ffn_embed_dim is 4 * embed_dim
+        ffn_embed_dim, #JO: ffn_embed_dim is 4 * embed_dim
         attention_heads,
-        add_bias_kv=True, #JO: 1. False
-        use_esm1b_layer_norm=False, #JO: 1. True
-        use_rotary_embeddings: bool = False, #JO: 1. True
+        add_bias_kv=True, #JO: False
+        use_esm1b_layer_norm=False, #JO: True
+        use_rotary_embeddings: bool = False, #JO: True
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -124,9 +126,9 @@ class TransformerLayer(nn.Module):
         self.self_attn = MultiheadAttention(
             self.embed_dim,
             self.attention_heads,
-            add_bias_kv=add_bias_kv,
+            add_bias_kv=add_bias_kv, #JO: False
             add_zero_attn=False,
-            use_rotary_embeddings=self.use_rotary_embeddings,
+            use_rotary_embeddings=self.use_rotary_embeddings, #JO: True
         )
         #JO: define weight and bias, the same size as embed dim
         self.self_attn_layer_norm = BertLayerNorm(self.embed_dim)
@@ -138,7 +140,7 @@ class TransformerLayer(nn.Module):
     '''
     JO: Perform a forward pass through a Transformer layer, including self-attention and feed-forward layers.
     input:
-        x: The input tensor of shape (L, N, E) where L is the sequence length, N is the batch size, and E is the embedding dimension.
+        x: The input tensor of shape (L, B, C) where L is the sequence length, B is the batch size, and C is the embedding dimension.
         self_attn_mask: Optional mask for attention weights to prevent attention to certain positions (L x S).
         self_attn_padding_mask: Optional padding mask to ignore certain tokens in the input sequence (N x L).
         need_head_weights: Boolean indicating whether to return attention weights for each head.
@@ -150,15 +152,18 @@ class TransformerLayer(nn.Module):
         self, x, self_attn_mask=None, self_attn_padding_mask=None, need_head_weights=False
     ):
         residual = x
+        #JO: Do Layer Normalization first
         x = self.self_attn_layer_norm(x)
+        #JO: Do self attention, padding mask is used here
+        #JO: x's shape is (L, B, C), attn's shape is (N, B, L, L)
         x, attn = self.self_attn(
             query=x,
             key=x,
             value=x,
             key_padding_mask=self_attn_padding_mask,
             need_weights=True,
-            need_head_weights=need_head_weights,
-            attn_mask=self_attn_mask,
+            need_head_weights=need_head_weights, #False
+            attn_mask=self_attn_mask, #None
         )
         x = residual + x
 
@@ -326,7 +331,7 @@ class SinusoidalPositionalEmbedding(nn.Module):
 
 class RobertaLMHead(nn.Module):
     """Head for masked language modeling."""
-
+    #JO: embed_dim is dimention of embeddings, output_dim is the size of vocabulary, weight is the embedding weight
     def __init__(self, embed_dim, output_dim, weight):
         super().__init__()
         self.dense = nn.Linear(embed_dim, embed_dim)
@@ -339,10 +344,12 @@ class RobertaLMHead(nn.Module):
         x = gelu(x)
         x = self.layer_norm(x)
         # project back to size of vocabulary with bias
+        #JO: the embedding has opposite effect in nn.Embedding and F.Linear, so here the dimention is 
+        #made back to the size of vocabulary
         x = F.linear(x, self.weight) + self.bias
         return x
 
-#JO: used for esm2 model initialization
+
 class ContactPredictionHead(nn.Module):
     """Performs symmetrization, apc, and computes a logistic regression on the output features"""
 
@@ -361,7 +368,7 @@ class ContactPredictionHead(nn.Module):
         if append_eos and eos_idx is None:
             raise ValueError("Using an alphabet with eos token, but no eos token was passed in.")
         self.eos_idx = eos_idx
-        #JO: take in weight and bias, output the one dimensional output
+        #JO: take in weight and bias, output the one dimensional output. The in_features is num_layers * attention_heads
         self.regression = nn.Linear(in_features, 1, bias)
         self.activation = nn.Sigmoid()
     '''

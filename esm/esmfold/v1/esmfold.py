@@ -145,9 +145,14 @@ class ESMFold(nn.Module):
             repr_layers=range(self.esm.num_layers + 1),
             need_head_weights=False,
         )
+        #JO: So res is a dictionary. 'logit' refers to the output logits (B, L, A)
+        #JO: 'representations' refers to the output of each layer (nLayers, L, B, C)
+        #JO: This step now is to stack the representations of each layer together and put them to dim=2
+        #JO: So the final shape is (B, L, nLayers, C)
         esm_s = torch.stack(
             [v for _, v in sorted(res["representations"].items())], dim=2
         )
+        #JO: Here only manipulate the second dimention, seems like to remove the bos and eos tokens
         esm_s = esm_s[:, 1:-1]  # B, L, nLayers, C
         return esm_s
 
@@ -204,15 +209,21 @@ class ESMFold(nn.Module):
         print("After adding the masking patterns inside ",esmaa)
         #JO: get the representation of the sequence: B, L, nLayers, C
         esm_s = self._compute_language_model_representations(esmaa)
+        #JO: shape of esm_s is (B, L, nLayers, C), with bos and eos removed
+        #JO: Output of ADK1, [1, 214, 37, 2560]
         print("Shape of the result of ESM2 calculation",esm_s.shape)
         # Convert esm_s to the precision used by the trunk and
         # the structure module. These tensors may be a lower precision if, for example,
         # we're running the language model in fp16 precision.
         esm_s = esm_s.to(self.esm_s_combine.dtype)
-
-        esm_s = esm_s.detach()
+        #JO: In order to make loss function work, I need to comment this step
+        #esm_s = esm_s.detach()
 
         # === preprocessing ===
+        #JO: Here the esm_s_combine is all 0 and shape is (nlayer + 1), so after softmax it just becomes average weights
+        #JO: The multiplication is (1, nlayer + 1) * (B, L, nlayer + 1, C) and result is (B, L, 1, C)
+        #JO: Final esm_s is (B, L, C), achieving effect that all the layer is averaged
+        #JO: Output of ADK1, [1, 214, 2560]
         esm_s = (self.esm_s_combine.softmax(0).unsqueeze(0) @ esm_s).squeeze(2)
         print("After combination, shape of the result of ESM2 calculation",esm_s.shape)
 
