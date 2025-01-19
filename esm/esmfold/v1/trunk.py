@@ -33,6 +33,7 @@ class StructureModuleConfig:
 """
 JOJO: Folding Trunk Config has higher superiority than Structure Module Config
 """
+
 @dataclass
 class FoldingTrunkConfig:
     _name: str = "FoldingTrunkConfig"
@@ -49,7 +50,7 @@ class FoldingTrunkConfig:
     max_recycles: int = 4
     chunk_size: T.Optional[int] = None
 
-    structure_module: StructureModuleConfig = field(default_factory=StructureModuleConfig)
+    structure_module: StructureModuleConfig = field(default_factory=lambda: StructureModuleConfig())
 
 
 def get_axial_mask(mask):
