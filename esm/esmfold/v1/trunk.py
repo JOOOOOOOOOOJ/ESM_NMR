@@ -150,6 +150,7 @@ class FoldingTrunk(nn.Module):
         # Freeze parameters of TriangularSelfAttentionBlock modules
         for block in self.blocks:
             for param in block.parameters():
+                print(param)
                 param.requires_grad = False
 
         self.recycle_bins = 15
@@ -263,7 +264,7 @@ class FoldingTrunk(nn.Module):
                 #############JO: Check memory usage#############
 
                 s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
-                
+
                 print("Successfully arrive after the trunk_iter in Folding Trunk")
                 #############JO: Check memory usage#############
                 device = torch.device("cuda:0")  # 假设使用第一块GPU

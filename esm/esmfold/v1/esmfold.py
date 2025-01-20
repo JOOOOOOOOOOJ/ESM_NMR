@@ -95,7 +95,8 @@ class ESMFold(nn.Module):
         hope it will have no influence on the result, so it is set to 0 and not updated during training
         '''
         self.embedding = nn.Embedding(self.n_tokens_embed, c_s, padding_idx=0)
-
+        for param in self.embedding.parameters():
+            param.requires_grad = False
         #JO: folding trunk has triangular attention blocks inside, '**' is to discompose the dictionary
         self.trunk = FoldingTrunk(**cfg.trunk)
         '''
@@ -254,9 +255,6 @@ class ESMFold(nn.Module):
         print("Successfullt pass the mlp layer in Folding Trunk!!!")
         #JO: The s_z_0 shape is (B, L, L, CZ)
         s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
-        #JO: Freeze the embedding layer
-        for param in self.embedding.parameters():
-            param.requires_grad = False
         #Another embedding, but the C is cs now (1024), shape is (B, L, CS)
         s_s_0 += self.embedding(aa)
         print("Successfully add the embedding to the sequence!!!")
