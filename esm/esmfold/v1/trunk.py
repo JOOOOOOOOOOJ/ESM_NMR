@@ -129,10 +129,10 @@ class FoldingTrunk(nn.Module):
         assert c_z % self.cfg.pairwise_head_width == 0
         block = TriangularSelfAttentionBlock
 
-        print("position bins used in position embeddings: ", self.cfg.position_bins)
+        print("position bins used in position embeddings: ", self.cfg.position_bins) #JO: 32
         self.pairwise_positional_embedding = RelativePosition(self.cfg.position_bins, c_z)
         #JO: Look like the MultiHeadAttention is replaced by TriangularSelfAttentionBlock
-        print("number of blocks in folding trunk (TriangularSelfAttentionBlock): ", self.cfg.num_blocks)
+        print("number of blocks in folding trunk (TriangularSelfAttentionBlock): ", self.cfg.num_blocks) #JO: 48
         self.blocks = nn.ModuleList(
             [
                 block(
@@ -215,6 +215,22 @@ class FoldingTrunk(nn.Module):
                 s, z = block(s, z, mask=mask, residue_index=residx, chunk_size=self.chunk_size)
             return s, z
         print("Successfully arrive before the recycle loop in Folding Trunk")
+        #############JO: Check memory usage#############
+        device = torch.device("cuda:0")  # 假设使用第一块GPU
+
+        # 获取GPU总内存
+        total_memory = torch.cuda.get_device_properties(device).total_memory
+
+        # 获取当前已分配的内存
+        allocated_memory = torch.cuda.memory_allocated(device)
+
+        # 计算剩余内存
+        free_memory = total_memory - allocated_memory
+
+        print(f'GPU total memory: {total_memory / 1024 ** 2:.2f} MB')
+        print(f'Allocated memory: {allocated_memory / 1024 ** 2:.2f} MB')
+        print(f'Remaining memory: {free_memory / 1024 ** 2:.2f} MB')
+        #############JO: Check memory usage#############
         s_s = s_s_0
         s_z = s_z_0
         recycle_s = torch.zeros_like(s_s)
@@ -229,8 +245,42 @@ class FoldingTrunk(nn.Module):
                 recycle_z = self.recycle_z_norm(recycle_z.detach())
                 recycle_z += self.recycle_disto(recycle_bins.detach())
                 print("Successfully arrive before the trunk_iter in Folding Trunk")
+                #############JO: Check memory usage#############
+                device = torch.device("cuda:0")  # 假设使用第一块GPU
+
+                # 获取GPU总内存
+                total_memory = torch.cuda.get_device_properties(device).total_memory
+
+                # 获取当前已分配的内存
+                allocated_memory = torch.cuda.memory_allocated(device)
+
+                # 计算剩余内存
+                free_memory = total_memory - allocated_memory
+
+                print(f'GPU total memory: {total_memory / 1024 ** 2:.2f} MB')
+                print(f'Allocated memory: {allocated_memory / 1024 ** 2:.2f} MB')
+                print(f'Remaining memory: {free_memory / 1024 ** 2:.2f} MB')
+                #############JO: Check memory usage#############
+
                 s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
+                
                 print("Successfully arrive after the trunk_iter in Folding Trunk")
+                #############JO: Check memory usage#############
+                device = torch.device("cuda:0")  # 假设使用第一块GPU
+
+                # 获取GPU总内存
+                total_memory = torch.cuda.get_device_properties(device).total_memory
+
+                # 获取当前已分配的内存
+                allocated_memory = torch.cuda.memory_allocated(device)
+
+                # 计算剩余内存
+                free_memory = total_memory - allocated_memory
+
+                print(f'GPU total memory: {total_memory / 1024 ** 2:.2f} MB')
+                print(f'Allocated memory: {allocated_memory / 1024 ** 2:.2f} MB')
+                print(f'Remaining memory: {free_memory / 1024 ** 2:.2f} MB')
+                #############JO: Check memory usage#############
                 # === Structure module ===
                 structure = self.structure_module(
                     {"single": self.trunk2sm_s(s_s), "pair": self.trunk2sm_z(s_z)},

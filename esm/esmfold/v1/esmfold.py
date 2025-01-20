@@ -265,6 +265,25 @@ class ESMFold(nn.Module):
             s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
         )
         print("Successfully pass the folding trunk (multiple TriangularSelfAttention Blocks)!!!")
+        
+        #############JO: Check memory usage#############
+        device = torch.device("cuda:0")  # 假设使用第一块GPU
+
+        # 获取GPU总内存
+        total_memory = torch.cuda.get_device_properties(device).total_memory
+
+        # 获取当前已分配的内存
+        allocated_memory = torch.cuda.memory_allocated(device)
+
+        # 计算剩余内存
+        free_memory = total_memory - allocated_memory
+
+        print(f'GPU total memory: {total_memory / 1024 ** 2:.2f} MB')
+        print(f'Allocated memory: {allocated_memory / 1024 ** 2:.2f} MB')
+        print(f'Remaining memory: {free_memory / 1024 ** 2:.2f} MB')
+        #############JO: Check memory usage#############
+
+
         # Documenting what we expect:
         structure = {
             k: v
@@ -383,6 +402,7 @@ class ESMFold(nn.Module):
 
         return esm_s, aa, B, L, residx, mask, num_recycles, linker_mask, chain_index
     
+    @torch.no_grad()
     def infer_structure(self, esm_s, aa, B, L, residx, mask, num_recycles, linker_mask, chain_index):
         output = self.get_structure(esm_s, aa, B, L, residx, mask, num_recycles)
         output["atom37_atom_exists"] = output[

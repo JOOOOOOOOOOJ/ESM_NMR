@@ -46,7 +46,7 @@ class TriangularSelfAttentionBlock(nn.Module):
         self.pairwise_state_dim = pairwise_state_dim
         #JO: Normalization of last dimension of input (the same size as SD)
         self.layernorm_1 = nn.LayerNorm(sequence_state_dim)
-
+        
         self.sequence_to_pair = SequenceToPair(
             sequence_state_dim, pairwise_state_dim // 2, pairwise_state_dim
         )

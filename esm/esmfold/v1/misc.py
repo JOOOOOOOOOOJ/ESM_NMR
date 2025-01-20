@@ -151,7 +151,7 @@ def collate_dense_tensors(
         result_i[tuple(slice(0, k) for k in t.shape)] = t
     return result
 
-
+#JO: input initiation: (SD, SH, SW)
 class Attention(nn.Module):
     def __init__(self, embed_dim, num_heads, head_width, gated=False):
         super().__init__()
@@ -163,7 +163,7 @@ class Attention(nn.Module):
 
         self.proj = nn.Linear(embed_dim, embed_dim * 3, bias=False)
         self.o_proj = nn.Linear(embed_dim, embed_dim, bias=True)
-        self.gated = gated
+        self.gated = gated #JO: True
         if gated:
             self.g_proj = nn.Linear(embed_dim, embed_dim)
             torch.nn.init.zeros_(self.g_proj.weight)
@@ -244,9 +244,10 @@ class SequenceToPair(nn.Module):
         super().__init__()
 
         self.layernorm = nn.LayerNorm(sequence_state_dim)
+        #JO: So these two steps change shape from SD to PD then to PD
         self.proj = nn.Linear(sequence_state_dim, inner_dim * 2, bias=True)
         self.o_proj = nn.Linear(2 * inner_dim, pairwise_state_dim, bias=True)
-
+        #JO: initialize the bias to zero
         torch.nn.init.zeros_(self.proj.bias)
         torch.nn.init.zeros_(self.o_proj.bias)
 
@@ -276,11 +277,11 @@ class SequenceToPair(nn.Module):
 
         return x
 
-
+#JO: input initiation: (PD, SH)
 class PairToSequence(nn.Module):
     def __init__(self, pairwise_state_dim, num_heads):
         super().__init__()
-
+        #JO: Change shape from PD to SH
         self.layernorm = nn.LayerNorm(pairwise_state_dim)
         self.linear = nn.Linear(pairwise_state_dim, num_heads, bias=False)
 
