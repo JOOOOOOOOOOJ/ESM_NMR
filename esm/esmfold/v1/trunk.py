@@ -50,7 +50,7 @@ class FoldingTrunkConfig:
     max_recycles: int = 4
     chunk_size: T.Optional[int] = None
 
-    structure_module: StructureModuleConfig = field(default_factory=lambda: StructureModuleConfig())
+    structure_module: StructureModuleConfig = field(default_factory=StructureModuleConfig)
 
 
 def get_axial_mask(mask):
