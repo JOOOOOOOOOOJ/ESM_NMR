@@ -235,75 +235,74 @@ class ESMFold(nn.Module):
         return esm_s, aa, B, L, residx, mask, num_recycles
     
     def get_structure(self, esm_s, aa, B, L, residx, mask, num_recycles):
-        with torch.no_grad():
-            #JO: Norm -> Linear -> ReLU -> Linear, output shape is (B, L, CS)
-            s_s_0 = self.esm_s_mlp(esm_s)
-            print("Successfullt pass the mlp layer in Folding Trunk!!!")
-            #JO: The s_z_0 shape is (B, L, L, CZ)
-            s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
+        #JO: Norm -> Linear -> ReLU -> Linear, output shape is (B, L, CS)
+        s_s_0 = self.esm_s_mlp(esm_s)
+        print("Successfullt pass the mlp layer in Folding Trunk!!!")
+        #JO: The s_z_0 shape is (B, L, L, CZ)
+        s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
 
-            s_s_0 += self.embedding(aa)
-            print("After adding the embedding, s_s_0: ",s_s_0)
-            #JO: This is the last mask here in esmfold
-            structure: dict = self.trunk(
-                s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
+        s_s_0 += self.embedding(aa)
+        print("After adding the embedding, s_s_0: ",s_s_0)
+        #JO: This is the last mask here in esmfold
+        structure: dict = self.trunk(
+            s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
+        )
+        # Documenting what we expect:
+        structure = {
+            k: v
+            for k, v in structure.items()
+            if k
+            in [
+                "s_z",
+                "s_s",
+                "frames",
+                "sidechain_frames",
+                "unnormalized_angles",
+                "angles",
+                "positions",
+                "states",
+            ]
+        }
+
+        disto_logits = self.distogram_head(structure["s_z"])
+        disto_logits = (disto_logits + disto_logits.transpose(1, 2)) / 2
+        structure["distogram_logits"] = disto_logits
+
+        lm_logits = self.lm_head(structure["s_s"])
+        structure["lm_logits"] = lm_logits
+
+        structure["aatype"] = aa
+        make_atom14_masks(structure)
+
+        for k in [
+            "atom14_atom_exists",
+            "atom37_atom_exists",
+        ]:
+            structure[k] *= mask.unsqueeze(-1)
+        structure["residue_index"] = residx
+
+        lddt_head = self.lddt_head(structure["states"]).reshape(
+            structure["states"].shape[0], B, L, -1, self.lddt_bins
+        )
+        structure["lddt_head"] = lddt_head
+        plddt = categorical_lddt(lddt_head[-1], bins=self.lddt_bins)
+        structure["plddt"] = 100 * plddt  # we predict plDDT between 0 and 1, scale to be between 0 and 100.
+        #JO: If I can get to know what each dimention of lddt_head is, I can understand the model better
+        ptm_logits = self.ptm_head(structure["s_z"])
+
+        seqlen = mask.type(torch.int64).sum(1)
+        structure["ptm_logits"] = ptm_logits
+        structure["ptm"] = torch.stack([
+            compute_tm(batch_ptm_logits[None, :sl, :sl], max_bins=31, no_bins=self.distogram_bins)
+            for batch_ptm_logits, sl in zip(ptm_logits, seqlen)
+        ])
+        structure.update(
+            compute_predicted_aligned_error(
+                ptm_logits, max_bin=31, no_bins=self.distogram_bins
             )
-            # Documenting what we expect:
-            structure = {
-                k: v
-                for k, v in structure.items()
-                if k
-                in [
-                    "s_z",
-                    "s_s",
-                    "frames",
-                    "sidechain_frames",
-                    "unnormalized_angles",
-                    "angles",
-                    "positions",
-                    "states",
-                ]
-            }
+        )
 
-            disto_logits = self.distogram_head(structure["s_z"])
-            disto_logits = (disto_logits + disto_logits.transpose(1, 2)) / 2
-            structure["distogram_logits"] = disto_logits
-
-            lm_logits = self.lm_head(structure["s_s"])
-            structure["lm_logits"] = lm_logits
-
-            structure["aatype"] = aa
-            make_atom14_masks(structure)
-
-            for k in [
-                "atom14_atom_exists",
-                "atom37_atom_exists",
-            ]:
-                structure[k] *= mask.unsqueeze(-1)
-            structure["residue_index"] = residx
-
-            lddt_head = self.lddt_head(structure["states"]).reshape(
-                structure["states"].shape[0], B, L, -1, self.lddt_bins
-            )
-            structure["lddt_head"] = lddt_head
-            plddt = categorical_lddt(lddt_head[-1], bins=self.lddt_bins)
-            structure["plddt"] = 100 * plddt  # we predict plDDT between 0 and 1, scale to be between 0 and 100.
-            #JO: If I can get to know what each dimention of lddt_head is, I can understand the model better
-            ptm_logits = self.ptm_head(structure["s_z"])
-
-            seqlen = mask.type(torch.int64).sum(1)
-            structure["ptm_logits"] = ptm_logits
-            structure["ptm"] = torch.stack([
-                compute_tm(batch_ptm_logits[None, :sl, :sl], max_bins=31, no_bins=self.distogram_bins)
-                for batch_ptm_logits, sl in zip(ptm_logits, seqlen)
-            ])
-            structure.update(
-                compute_predicted_aligned_error(
-                    ptm_logits, max_bin=31, no_bins=self.distogram_bins
-                )
-            )
-
-            return structure
+        return structure
 
     @torch.no_grad()
     def infer(
