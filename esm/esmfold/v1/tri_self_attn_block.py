@@ -36,8 +36,10 @@ class TriangularSelfAttentionBlock(nn.Module):
 
         assert sequence_state_dim % sequence_head_width == 0
         assert pairwise_state_dim % pairwise_head_width == 0
-        sequence_num_heads = sequence_state_dim // sequence_head_width #JO: Reassign, Sequence_Num_heads: SH, Sequence_state_dim: SD, Sequence_head_width: SW
-        pairwise_num_heads = pairwise_state_dim // pairwise_head_width #JO: Reassign, Pairwise_Num_heads: PH, Pairwise_state_dim: PD, Pairwise_head_width: PW
+        #JO: Reassign, Sequence_Num_heads: SH, Sequence_state_dim: SD, Sequence_head_width: SW
+        sequence_num_heads = sequence_state_dim // sequence_head_width
+        #JO: Reassign, Pairwise_Num_heads: PH, Pairwise_state_dim: PD, Pairwise_head_width: PW
+        pairwise_num_heads = pairwise_state_dim // pairwise_head_width 
         assert sequence_state_dim == sequence_num_heads * sequence_head_width
         assert pairwise_state_dim == pairwise_num_heads * pairwise_head_width
         assert pairwise_state_dim % 2 == 0
@@ -46,7 +48,7 @@ class TriangularSelfAttentionBlock(nn.Module):
         self.pairwise_state_dim = pairwise_state_dim
         #JO: Normalization of last dimension of input (the same size as SD)
         self.layernorm_1 = nn.LayerNorm(sequence_state_dim)
-        
+
         self.sequence_to_pair = SequenceToPair(
             sequence_state_dim, pairwise_state_dim // 2, pairwise_state_dim
         )
@@ -59,6 +61,9 @@ class TriangularSelfAttentionBlock(nn.Module):
             pairwise_state_dim,
             pairwise_state_dim,
         )
+        for param in self.tri_mul_out.parameters():
+            print(param)
+            param.requires_grad = False
         self.tri_mul_in = TriangleMultiplicationIncoming(
             pairwise_state_dim,
             pairwise_state_dim,
