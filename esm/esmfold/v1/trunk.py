@@ -150,8 +150,8 @@ class FoldingTrunk(nn.Module):
         # Freeze parameters of TriangularSelfAttentionBlock modules
         for block in self.blocks:
             for param in block.parameters():
+                # param.requires_grad = False
                 print(param)
-                param.requires_grad = False
 
         self.recycle_bins = 15
         self.recycle_s_norm = nn.LayerNorm(c_s)
