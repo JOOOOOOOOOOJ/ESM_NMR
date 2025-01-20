@@ -95,14 +95,25 @@ class ESMFold(nn.Module):
         hope it will have no influence on the result, so it is set to 0 and not updated during training
         '''
         self.embedding = nn.Embedding(self.n_tokens_embed, c_s, padding_idx=0)
+
         #JO: folding trunk has triangular attention blocks inside, '**' is to discompose the dictionary
         self.trunk = FoldingTrunk(**cfg.trunk)
         '''
         JOJO: I would expect these layers to help analyze outputs from esm2
         '''
         self.distogram_head = nn.Linear(c_z, self.distogram_bins)
+        #JO: Freeze
+        for param in self.distogram_head.parameters():
+            param.requires_grad = False
+                
         self.ptm_head = nn.Linear(c_z, self.distogram_bins)
+        #JO: Freeze
+        for param in self.ptm_head.parameters():
+            param.requires_grad = False
         self.lm_head = nn.Linear(c_s, self.n_tokens_embed)
+        #JO: Freeze
+        for param in self.lm_head.parameters():
+            param.requires_grad = False
         self.lddt_bins = 50
         self.lddt_head = nn.Sequential(
             nn.LayerNorm(cfg.trunk.structure_module.c_s),
@@ -110,6 +121,9 @@ class ESMFold(nn.Module):
             nn.Linear(cfg.lddt_head_hid_dim, cfg.lddt_head_hid_dim),
             nn.Linear(cfg.lddt_head_hid_dim, 37 * self.lddt_bins),
         )
+        #JO: Freeze
+        for param in self.lddt_head.parameters():
+            param.requires_grad = False
 
     #JO: Static method has no relationship with the instance of the class. It is just a function inside the class
     @staticmethod
@@ -240,9 +254,12 @@ class ESMFold(nn.Module):
         print("Successfullt pass the mlp layer in Folding Trunk!!!")
         #JO: The s_z_0 shape is (B, L, L, CZ)
         s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
-
+        #JO: Freeze the embedding layer
+        for param in self.embedding.parameters():
+            param.requires_grad = False
+        #Another embedding, but the C is cs now (1024), shape is (B, L, CS)
         s_s_0 += self.embedding(aa)
-        print("After adding the embedding, s_s_0: ",s_s_0)
+        print("Successfully add the embedding to the sequence!!!")
         #JO: This is the last mask here in esmfold
         structure: dict = self.trunk(
             s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
