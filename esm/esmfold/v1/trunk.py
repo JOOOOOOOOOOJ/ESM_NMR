@@ -50,7 +50,7 @@ class FoldingTrunkConfig:
     max_recycles: int = 4
     chunk_size: T.Optional[int] = None
 
-    structure_module: StructureModuleConfig = field(default_factory=StructureModuleConfig)
+    structure_module: StructureModuleConfig = field(default_factory=StructureModuleConfig) #JO: Debug ESMFold, this is the characteristics of dataclass
 
 
 def get_axial_mask(mask):
@@ -149,6 +149,9 @@ class FoldingTrunk(nn.Module):
         #JO: Test
         # self.cfg.structure_module.dropout_rate = 0.2
         self.structure_module = StructureModule(**self.cfg.structure_module)  # type: ignore
+        #JO: Freeze the parameters of the structure module
+        for param in self.structure_module.parameters():
+            param.requires_grad = False
         # print(self.cfg.structure_module)
         self.trunk2sm_s = nn.Linear(c_s, self.structure_module.c_s)
         self.trunk2sm_z = nn.Linear(c_z, self.structure_module.c_z)
@@ -208,21 +211,23 @@ class FoldingTrunk(nn.Module):
                 s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
 
                 # === Structure module ===
-                structure = self.structure_module(
-                    {"single": self.trunk2sm_s(s_s), "pair": self.trunk2sm_z(s_z)},
-                    true_aa,
-                    mask.float(),
-                )
+                #JO: Try to freeze the gradient here
+                with torch.no_grad():
+                    structure = self.structure_module(
+                        {"single": self.trunk2sm_s(s_s), "pair": self.trunk2sm_z(s_z)},
+                        true_aa,
+                        mask.float(),
+                    )
 
-                recycle_s = s_s
-                recycle_z = s_z
-                # Distogram needs the N, CA, C coordinates, and bin constants same as alphafold.
-                recycle_bins = FoldingTrunk.distogram(
-                    structure["positions"][-1][:, :, :3],
-                    3.375,
-                    21.375,
-                    self.recycle_bins,
-                )
+                    recycle_s = s_s
+                    recycle_z = s_z
+                    # Distogram needs the N, CA, C coordinates, and bin constants same as alphafold.
+                    recycle_bins = FoldingTrunk.distogram(
+                        structure["positions"][-1][:, :, :3],
+                        3.375,
+                        21.375,
+                        self.recycle_bins,
+                    )
 
         assert isinstance(structure, dict)  # type: ignore
         structure["s_s"] = s_s

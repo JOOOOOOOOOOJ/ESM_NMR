@@ -27,7 +27,7 @@ from esm.esmfold.v1.misc import (
 
 @dataclass
 class ESMFoldConfig:
-    trunk: FoldingTrunkConfig = field(default_factory=FoldingTrunkConfig)
+    trunk: FoldingTrunkConfig = field(default_factory=FoldingTrunkConfig) #JO: Debug ESMFold, this is the characteristics of dataclass
     lddt_head_hid_dim: int = 128
 
  
@@ -359,7 +359,6 @@ class ESMFold(nn.Module):
 
         return esm_s, aa, B, L, residx, mask, num_recycles, linker_mask, chain_index
     
-    @torch.no_grad()
     def infer_structure(self, esm_s, aa, B, L, residx, mask, num_recycles, linker_mask, chain_index):
         output = self.get_structure(esm_s, aa, B, L, residx, mask, num_recycles)
         output["atom37_atom_exists"] = output[
