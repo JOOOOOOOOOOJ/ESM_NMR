@@ -261,8 +261,8 @@ class FoldingTrunk(nn.Module):
                 print(f'Allocated memory: {allocated_memory / 1024 ** 2:.2f} MB')
                 print(f'Remaining memory: {free_memory / 1024 ** 2:.2f} MB')
                 #############JO: Check memory usage#############
-
-                s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
+                with torch.no_grad():
+                    s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
 
                 print("Successfully arrive after the trunk_iter in Folding Trunk")
                 #############JO: Check memory usage#############

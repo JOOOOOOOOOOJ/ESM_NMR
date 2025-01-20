@@ -62,24 +62,29 @@ class TriangularSelfAttentionBlock(nn.Module):
             pairwise_state_dim,
         )
         for param in self.tri_mul_out.parameters():
-            print(param)
             param.requires_grad = False
         self.tri_mul_in = TriangleMultiplicationIncoming(
             pairwise_state_dim,
             pairwise_state_dim,
         )
+        for param in self.tri_mul_in.parameters():
+            param.requires_grad = False
         self.tri_att_start = TriangleAttentionStartingNode(
             pairwise_state_dim,
             pairwise_head_width,
             pairwise_num_heads,
             inf=1e9,
         )  # type: ignore
+        for param in self.tri_att_start.parameters():
+            param.requires_grad = False
         self.tri_att_end = TriangleAttentionEndingNode(
             pairwise_state_dim,
             pairwise_head_width,
             pairwise_num_heads,
             inf=1e9,
         )  # type: ignore
+        for param in self.tri_att_end.parameters():
+            param.requires_grad = False
 
         self.mlp_seq = ResidueMLP(sequence_state_dim, 4 * sequence_state_dim, dropout=dropout)
         self.mlp_pair = ResidueMLP(pairwise_state_dim, 4 * pairwise_state_dim, dropout=dropout)
