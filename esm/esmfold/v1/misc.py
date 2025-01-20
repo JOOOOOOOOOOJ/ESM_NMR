@@ -238,7 +238,7 @@ class Dropout(nn.Module):
                 shape[bd] = 1
         return x * self.dropout(x.new_ones(shape))
 
-
+#JO: input initiation: (SD, inner_dim = PD//2, PD)
 class SequenceToPair(nn.Module):
     def __init__(self, sequence_state_dim, inner_dim, pairwise_state_dim):
         super().__init__()

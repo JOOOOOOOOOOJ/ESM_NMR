@@ -214,7 +214,7 @@ class FoldingTrunk(nn.Module):
             for block in self.blocks:
                 s, z = block(s, z, mask=mask, residue_index=residx, chunk_size=self.chunk_size)
             return s, z
-
+        print("Successfully arrive before the recycle loop in Folding Trunk")
         s_s = s_s_0
         s_z = s_z_0
         recycle_s = torch.zeros_like(s_s)
@@ -228,9 +228,9 @@ class FoldingTrunk(nn.Module):
                 recycle_s = self.recycle_s_norm(recycle_s.detach())
                 recycle_z = self.recycle_z_norm(recycle_z.detach())
                 recycle_z += self.recycle_disto(recycle_bins.detach())
-
+                print("Successfully arrive before the trunk_iter in Folding Trunk")
                 s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
-
+                print("Successfully arrive after the trunk_iter in Folding Trunk")
                 # === Structure module ===
                 structure = self.structure_module(
                     {"single": self.trunk2sm_s(s_s), "pair": self.trunk2sm_z(s_z)},

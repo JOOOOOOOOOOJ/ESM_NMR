@@ -25,10 +25,10 @@ from esm.esmfold.v1.misc import (
 class TriangularSelfAttentionBlock(nn.Module):
     def __init__(
         self,
-        sequence_state_dim,
-        pairwise_state_dim,
-        sequence_head_width,
-        pairwise_head_width,
+        sequence_state_dim, #JO: 1024
+        pairwise_state_dim, #JO: 128
+        sequence_head_width, #JO: 32
+        pairwise_head_width, #JO: 32
         dropout=0,
         **__kwargs,
     ):
@@ -44,7 +44,7 @@ class TriangularSelfAttentionBlock(nn.Module):
 
         self.sequence_state_dim = sequence_state_dim
         self.pairwise_state_dim = pairwise_state_dim
-
+        #JO: Normalization of last dimension of input (the same size as SD)
         self.layernorm_1 = nn.LayerNorm(sequence_state_dim)
 
         self.sequence_to_pair = SequenceToPair(
