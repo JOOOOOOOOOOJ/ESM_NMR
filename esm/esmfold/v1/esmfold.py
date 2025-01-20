@@ -264,6 +264,7 @@ class ESMFold(nn.Module):
         structure: dict = self.trunk(
             s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
         )
+        print("Successfully pass the folding trunk (multiple TriangularSelfAttention Blocks)!!!")
         # Documenting what we expect:
         structure = {
             k: v

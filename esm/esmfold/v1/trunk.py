@@ -122,7 +122,8 @@ class FoldingTrunk(nn.Module):
         #JO: Here CS and CZ are from config file, hope it will be the same as trunk cs and cz
         c_s = self.cfg.sequence_state_dim
         c_z = self.cfg.pairwise_state_dim
-        print("cz and cs inside the folding trunk, hope it will be the same as outside: ", c_s, c_z)
+        print("cz (sequence state dim) and cs (pairwise state dim) inside the folding trunk, hope it will be the same as outside: ", c_s, c_z)
+        print("sequence head width and pairwise head width: ", self.cfg.sequence_head_width, self.cfg.pairwise_head_width)
         #JO: MultiHead again
         assert c_s % self.cfg.sequence_head_width == 0
         assert c_z % self.cfg.pairwise_head_width == 0
@@ -131,6 +132,7 @@ class FoldingTrunk(nn.Module):
         print("position bins used in position embeddings: ", self.cfg.position_bins)
         self.pairwise_positional_embedding = RelativePosition(self.cfg.position_bins, c_z)
         #JO: Look like the MultiHeadAttention is replaced by TriangularSelfAttentionBlock
+        print("number of blocks in folding trunk (TriangularSelfAttentionBlock): ", self.cfg.num_blocks)
         self.blocks = nn.ModuleList(
             [
                 block(
@@ -152,7 +154,11 @@ class FoldingTrunk(nn.Module):
 
         self.recycle_bins = 15
         self.recycle_s_norm = nn.LayerNorm(c_s)
+        for param in self.recycle_s_norm.parameters():
+            param.requires_grad = False
         self.recycle_z_norm = nn.LayerNorm(c_z)
+        for param in self.recycle_z_norm.parameters():
+            param.requires_grad = False
         self.recycle_disto = nn.Embedding(self.recycle_bins, c_z)
         self.recycle_disto.weight[0].detach().zero_()
         for param in self.recycle_disto.parameters():

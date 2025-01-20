@@ -36,8 +36,8 @@ class TriangularSelfAttentionBlock(nn.Module):
 
         assert sequence_state_dim % sequence_head_width == 0
         assert pairwise_state_dim % pairwise_head_width == 0
-        sequence_num_heads = sequence_state_dim // sequence_head_width
-        pairwise_num_heads = pairwise_state_dim // pairwise_head_width
+        sequence_num_heads = sequence_state_dim // sequence_head_width #JO: Reassign, Sequence_Num_heads: SH, Sequence_state_dim: SD, Sequence_head_width: SW
+        pairwise_num_heads = pairwise_state_dim // pairwise_head_width #JO: Reassign, Pairwise_Num_heads: PH, Pairwise_state_dim: PD, Pairwise_head_width: PW
         assert sequence_state_dim == sequence_num_heads * sequence_head_width
         assert pairwise_state_dim == pairwise_num_heads * pairwise_head_width
         assert pairwise_state_dim % 2 == 0
