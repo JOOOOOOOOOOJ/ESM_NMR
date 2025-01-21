@@ -252,6 +252,7 @@ class ESMFold(nn.Module):
     def get_structure(self, esm_s, aa, B, L, residx, mask, num_recycles):
         #JO: Norm -> Linear -> ReLU -> Linear, output shape is (B, L, CS)
         s_s_0 = self.esm_s_mlp(esm_s)
+        print("s_s_0 grad:", s_s_0.requires_grad)
         print("Successfullt pass the mlp layer in Folding Trunk!!!")
         #JO: The s_z_0 shape is (B, L, L, CZ)
         s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
