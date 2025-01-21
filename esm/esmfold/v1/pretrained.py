@@ -1,71 +1,30 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 from pathlib import Path
 
 import torch
 
 from esm.esmfold.v1.esmfold import ESMFold
 
-import os
-import subprocess
-
-def install_aria2():
-    """Ensure aria2 is installed."""
-    try:
-        subprocess.run(["aria2c", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    except FileNotFoundError:
-        print("Installing aria2...")
-        os.system("apt-get install aria2 -qq")
-
-def _download_file(url, save_dir="downloads", filename=None):
-    """Download a file using aria2 and return the path to the downloaded file."""
-    print(f"Downloading {url}...")
-    
-    # Ensure save directory exists
-    save_path = Path(save_dir)
-    save_path.mkdir(parents=True, exist_ok=True)
-
-    # Use custom filename or extract from URL
-    filename = filename or url.split("/")[-1]
-    full_path = save_path / filename
-
-    # Run aria2c download command
-    result = subprocess.run(
-        ["aria2c", "-q", "-x", "16", "-d", str(save_path), "-o", filename, url],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Failed to download {url}. Error: {result.stderr.decode()}")
-
-    print(f"Downloaded to {full_path}")
-    return full_path
-
 
 def _load_model(model_name):
-    install_aria2()
     if model_name.endswith(".pt"):  # local, treat as filepath
         model_path = Path(model_name)
-        model_data = torch.load(str(model_path), map_location="meta", mmap=True)
-
+        model_data = torch.load(str(model_path), map_location="cpu")
     else:  # load from hub
         url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
-        # url = "https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t36_3B_UR50D-contact-regression.pt"
-        downloaded_file = _download_file(url)
-        print(f"Loading downloaded model: {downloaded_file}")
-        # torch.serialization.add_safe_globals([str(downloaded_file)])
-        model_data = torch.load(str(downloaded_file), map_location="cpu", mmap=True)
-    '''
-    JOJO: cfg and model_state are the most important information got from pretrained model.
-    Get all the parameters needed for folding trunk (like everything shown in trunk.py Folding
-    Trunk Config and Structure Module Config)
-    '''
+        model_data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu")
+
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
-    '''
-    JOJO: Here is the place ESMFold is loaded.
-    '''
     model = ESMFold(esmfold_config=cfg)
+
     expected_keys = set(model.state_dict().keys())
     found_keys = set(model_state.keys())
+
     missing_essential_keys = []
     for missing_key in expected_keys - found_keys:
         if not missing_key.startswith("esm."):
@@ -73,11 +32,7 @@ def _load_model(model_name):
 
     if missing_essential_keys:
         raise RuntimeError(f"Keys '{', '.join(missing_essential_keys)}' are missing.")
-    
-    '''
-    JOJO: At this point, all the weights and bias are loaded into the model.
-    Then it's ready to use
-    '''
+
     model.load_state_dict(model_state, strict=False)
 
     return model
@@ -86,7 +41,7 @@ def _load_model(model_name):
 def esmfold_v0():
     """
     ESMFold v0 model with 3B ESM-2, 48 folding blocks.
-    This version was used for the paper (Lin et al, 2022). It was trained 
+    This version was used for the paper (Lin et al, 2022). It was trained
     on all PDB chains until 2020-05, to ensure temporal holdout with CASP14
     and the CAMEO validation and test set reported there.
     """
@@ -102,3 +57,125 @@ def esmfold_v1():
     protein sequence.
     """
     return _load_model("esmfold_3B_v1")
+
+
+def esmfold_structure_module_only_8M():
+    """
+    ESMFold baseline model using 8M ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 500K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_8M")
+
+
+def esmfold_structure_module_only_8M_270K():
+    """
+    ESMFold baseline model using 8M ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 270K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_8M_270K")
+
+
+def esmfold_structure_module_only_35M():
+    """
+    ESMFold baseline model using 35M ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 500K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_35M")
+
+
+def esmfold_structure_module_only_35M_270K():
+    """
+    ESMFold baseline model using 35M ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 270K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_35M_270K")
+
+
+def esmfold_structure_module_only_150M():
+    """
+    ESMFold baseline model using 150M ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 500K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_150M")
+
+
+def esmfold_structure_module_only_150M_270K():
+    """
+    ESMFold baseline model using 150M ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 270K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_150M_270K")
+
+
+def esmfold_structure_module_only_650M():
+    """
+    ESMFold baseline model using 650M ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 500K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_650M")
+
+
+def esmfold_structure_module_only_650M_270K():
+    """
+    ESMFold baseline model using 650M ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 270K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_650M_270K")
+
+
+def esmfold_structure_module_only_3B():
+    """
+    ESMFold baseline model using 3B ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 500K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_3B")
+
+
+def esmfold_structure_module_only_3B_270K():
+    """
+    ESMFold baseline model using 3B ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 270K updates.
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_3B_270K")
+
+
+def esmfold_structure_module_only_15B():
+    """
+    ESMFold baseline model using 15B ESM-2, 0 folding blocks.
+    ESM-2 here is trained out to 270K updates.
+    The 15B parameter ESM-2 was not trained out to 500K updates
+    This is a model designed to test the capabilities of the language model
+    when ablated for number of parameters in the language model.
+    See table S1 in (Lin et al, 2022).
+    """
+    return _load_model("esmfold_structure_module_only_15B")
