@@ -30,7 +30,7 @@ def load_model_and_alphabet(model_name):
 
 def load_hub_workaround(url):
     try:
-        data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu")
+        data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu",model_dir="/tmp/.cache")
     except RuntimeError:
         # Pytorch version issue - see https://github.com/pytorch/pytorch/issues/43106
         fn = Path(url).name
