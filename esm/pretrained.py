@@ -73,7 +73,8 @@ def load_hub_workaround(url, device1="cpu"):
     downloaded_file = _download_file(url)
     print(f"Loading downloaded model: {downloaded_file}")
     try:
-        torch.serialization.add_safe_globals([str(downloaded_file)])
+        #JO: For CHTC, specific pytorch version
+        # torch.serialization.add_safe_globals([str(downloaded_file)])
         data = torch.load(str(downloaded_file), map_location=device1, mmap=True)
     except Exception as e:
         raise RuntimeError(f"Failed to load the model from {downloaded_file}. Error: {e}")
