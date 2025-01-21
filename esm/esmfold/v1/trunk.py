@@ -151,6 +151,7 @@ class FoldingTrunk(nn.Module):
         for block in self.blocks:
             for param in block.parameters():
                 param.requires_grad = False
+            print("triangularselfattentionblock parameters:", block.parameters())
 
         self.recycle_bins = 15
         self.recycle_s_norm = nn.LayerNorm(c_s)
