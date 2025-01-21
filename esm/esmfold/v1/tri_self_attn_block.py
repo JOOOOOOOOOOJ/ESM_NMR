@@ -49,45 +49,73 @@ class TriangularSelfAttentionBlock(nn.Module):
         #JO: Normalization of last dimension of input (the same size as SD)
         self.layernorm_1 = nn.LayerNorm(sequence_state_dim)
 
+        for param in self.layernorm_1.parameters():
+            param.requires_grad = False
+
         self.sequence_to_pair = SequenceToPair(
             sequence_state_dim, pairwise_state_dim // 2, pairwise_state_dim
         )
+        
+        for param in self.sequence_to_pair.parameters():
+            param.requires_grad = False
+        
         self.pair_to_sequence = PairToSequence(pairwise_state_dim, sequence_num_heads)
-
+        
+        for param in self.pair_to_sequence.parameters():
+            param.requires_grad = False
+        
         self.seq_attention = Attention(
             sequence_state_dim, sequence_num_heads, sequence_head_width, gated=True
         )
+
+        for param in self.seq_attention.parameters():
+            param.requires_grad = False
+
         self.tri_mul_out = TriangleMultiplicationOutgoing(
             pairwise_state_dim,
             pairwise_state_dim,
         )
+
         for param in self.tri_mul_out.parameters():
             param.requires_grad = False
+
         self.tri_mul_in = TriangleMultiplicationIncoming(
             pairwise_state_dim,
             pairwise_state_dim,
         )
+
         for param in self.tri_mul_in.parameters():
             param.requires_grad = False
+
         self.tri_att_start = TriangleAttentionStartingNode(
             pairwise_state_dim,
             pairwise_head_width,
             pairwise_num_heads,
             inf=1e9,
         )  # type: ignore
+
         for param in self.tri_att_start.parameters():
             param.requires_grad = False
+
         self.tri_att_end = TriangleAttentionEndingNode(
             pairwise_state_dim,
             pairwise_head_width,
             pairwise_num_heads,
             inf=1e9,
         )  # type: ignore
+
         for param in self.tri_att_end.parameters():
             param.requires_grad = False
 
         self.mlp_seq = ResidueMLP(sequence_state_dim, 4 * sequence_state_dim, dropout=dropout)
+
+        for param in self.mlp_seq.parameters():
+            param.requires_grad = False
+
         self.mlp_pair = ResidueMLP(pairwise_state_dim, 4 * pairwise_state_dim, dropout=dropout)
+
+        for param in self.mlp_pair.parameters():
+            param.requires_grad = False
 
         assert dropout < 0.4
         self.drop = nn.Dropout(dropout)
