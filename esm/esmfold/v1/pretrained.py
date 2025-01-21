@@ -16,7 +16,7 @@ def _load_model(model_name):
         model_data = torch.load(str(model_path), map_location="cpu")
     else:  # load from hub
         url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
-        model_data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu", model_dir="/tmp/.cache", mmap=True)
+        model_data = torch.hub.load_state_dict_from_url(url, progress=False, map_location="cpu", model_dir="/tmp/.cache")
 
     cfg = model_data["cfg"]["model"]
     model_state = model_data["model"]
