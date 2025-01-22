@@ -328,11 +328,13 @@ class ESMFold(nn.Module):
 
         seqlen = mask.type(torch.int64).sum(1)
         structure["ptm_logits"] = ptm_logits
+        print("ptm logits: ",ptm_logits)
+        print("seqlen: ",seqlen)
         #JO: Test what happened because of gradient
-        # structure["ptm"] = torch.stack([
-        #     compute_tm(batch_ptm_logits[None, :sl, :sl], max_bins=31, no_bins=self.distogram_bins)
-        #     for batch_ptm_logits, sl in zip(ptm_logits, seqlen)
-        # ])
+        structure["ptm"] = torch.stack([
+            compute_tm(batch_ptm_logits[None, :sl, :sl], max_bins=31, no_bins=self.distogram_bins)
+            for batch_ptm_logits, sl in zip(ptm_logits, seqlen)
+        ])
         structure.update(
             compute_predicted_aligned_error(
                 ptm_logits, max_bin=31, no_bins=self.distogram_bins
