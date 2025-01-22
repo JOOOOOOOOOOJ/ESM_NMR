@@ -211,8 +211,6 @@ class FoldingTrunk(nn.Module):
         def trunk_iter(s, z, residx, mask):
             z = z + self.pairwise_positional_embedding(residx, mask=mask)
             for block in self.blocks:
-                for param in block.parameters():
-                    print("Triangular param.requires_grad: ", param.requires_grad)
                 s, z = block(s, z, mask=mask, residue_index=residx, chunk_size=self.chunk_size)
             return s, z
         print("Successfully arrive before the recycle loop in Folding Trunk")
