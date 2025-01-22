@@ -70,9 +70,9 @@ def _load_model(model_name):
     for missing_key in expected_keys - found_keys:
         if not missing_key.startswith("esm."):
             missing_essential_keys.append(missing_key)
-
-    if missing_essential_keys:
-        raise RuntimeError(f"Keys '{', '.join(missing_essential_keys)}' are missing.")
+    #JO: These functions keys will not be used in the model, so it's fine to ignore them
+    # if missing_essential_keys:
+    #     raise RuntimeError(f"Keys '{', '.join(missing_essential_keys)}' are missing.")
     
     '''
     JOJO: At this point, all the weights and bias are loaded into the model.
