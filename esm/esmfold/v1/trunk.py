@@ -265,7 +265,10 @@ class FoldingTrunk(nn.Module):
                 print("s_z_0 requires grad: ", s_z_0.requires_grad)
                 print("recycle_s requires grad: ", recycle_s.requires_grad)
                 print("recycle_z requires grad: ", recycle_z.requires_grad)
-                s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
+
+                #JO: In order to test
+                with torch.no_grad():
+                    s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
 
                 print("Successfully arrive after the trunk_iter in Folding Trunk")
                 print("s_s requires grad: ", s_s.requires_grad)
