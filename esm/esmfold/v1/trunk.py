@@ -99,7 +99,7 @@ class RelativePosition(nn.Module):
         assert residue_index.dtype == torch.long
         if mask is not None:
             assert residue_index.shape == mask.shape
-        #JO: Normalization comes from here
+        #JO: Pairwise Diff
         diff = residue_index[:, None, :] - residue_index[:, :, None]
         diff = diff.clamp(-self.bins, self.bins)
         diff = diff + self.bins + 1  # Add 1 to adjust for padding index.
@@ -117,22 +117,16 @@ class FoldingTrunk(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.cfg = FoldingTrunkConfig(**kwargs)
-        print("folding trunk dropout: ", self.cfg.dropout)
         assert self.cfg.max_recycles > 0
         #JO: Here CS and CZ are from config file, hope it will be the same as trunk cs and cz
-        c_s = self.cfg.sequence_state_dim
-        c_z = self.cfg.pairwise_state_dim
-        print("cz (sequence state dim) and cs (pairwise state dim) inside the folding trunk, hope it will be the same as outside: ", c_s, c_z)
-        print("sequence head width and pairwise head width: ", self.cfg.sequence_head_width, self.cfg.pairwise_head_width)
+        c_s = self.cfg.sequence_state_dim #1024
+        c_z = self.cfg.pairwise_state_dim #128
         #JO: MultiHead again
-        assert c_s % self.cfg.sequence_head_width == 0
-        assert c_z % self.cfg.pairwise_head_width == 0
+        assert c_s % self.cfg.sequence_head_width == 0 #JO: head_width = 32
+        assert c_z % self.cfg.pairwise_head_width == 0 #JO: head_width = 32
         block = TriangularSelfAttentionBlock
-
-        print("position bins used in position embeddings: ", self.cfg.position_bins) #JO: 32
-        self.pairwise_positional_embedding = RelativePosition(self.cfg.position_bins, c_z)
-        #JO: Look like the MultiHeadAttention is replaced by TriangularSelfAttentionBlock
-        print("number of blocks in folding trunk (TriangularSelfAttentionBlock): ", self.cfg.num_blocks) #JO: 48
+        self.pairwise_positional_embedding = RelativePosition(self.cfg.position_bins, c_z) #JO: position_bins 32
+        #JO: Look like the MultiHeadAttention is replaced by TriangularSelfAttentionBlock 
         self.blocks = nn.ModuleList(
             [
                 block(
@@ -143,7 +137,7 @@ class FoldingTrunk(nn.Module):
                     dropout=self.cfg.dropout,
                     # dropout=0.15, #JOJO's changes
                 )
-                for i in range(self.cfg.num_blocks)
+                for i in range(self.cfg.num_blocks) #JO: 48
             ]
         )
 
@@ -172,11 +166,6 @@ class FoldingTrunk(nn.Module):
         # print(self.cfg.structure_module)
         self.trunk2sm_s = nn.Linear(c_s, self.structure_module.c_s)
         self.trunk2sm_z = nn.Linear(c_z, self.structure_module.c_z)
-        # freeze trunk2sm_s and trunk2sm_z
-        for param in self.trunk2sm_s.parameters():
-            param.requires_grad = False
-        for param in self.trunk2sm_z.parameters():
-            param.requires_grad = False
         self.chunk_size = self.cfg.chunk_size
 
     def set_chunk_size(self, chunk_size):
@@ -208,33 +197,28 @@ class FoldingTrunk(nn.Module):
             assert no_recycles >= 0, "Number of recycles must not be negative."
             no_recycles += 1  # First 'recycle' is just the standard forward pass through the model.
 
-        def trunk_iter(s, z, residx, mask):
-            z = z + self.pairwise_positional_embedding(residx, mask=mask)
+        def trunk_iter(s, z, residx, mask): #Input: s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask
+            z = z + self.pairwise_positional_embedding(residx, mask=mask) # residx: Residue indices of amino acids, Add position information
             for block in self.blocks:
                 s, z = block(s, z, mask=mask, residue_index=residx, chunk_size=self.chunk_size)
             return s, z
         print("Successfully arrive before the recycle loop in Folding Trunk")
+
         #############JO: Check memory usage#############
         device = torch.device("cuda:0")  # 假设使用第一块GPU
-
-        # 获取GPU总内存
         total_memory = torch.cuda.get_device_properties(device).total_memory
-
-        # 获取当前已分配的内存
         allocated_memory = torch.cuda.memory_allocated(device)
-
-        # 计算剩余内存
         free_memory = total_memory - allocated_memory
-
         print(f'GPU total memory: {total_memory / 1024 ** 2:.2f} MB')
         print(f'Allocated memory: {allocated_memory / 1024 ** 2:.2f} MB')
         print(f'Remaining memory: {free_memory / 1024 ** 2:.2f} MB')
         #############JO: Check memory usage#############
-        s_s = s_s_0
-        s_z = s_z_0
-        recycle_s = torch.zeros_like(s_s)
-        recycle_z = torch.zeros_like(s_z)
-        recycle_bins = torch.zeros(*s_z.shape[:-1], device=device, dtype=torch.int64)
+
+        s_s = s_s_0 #[B, L, C]
+        s_z = s_z_0 #[B, L, L, C]
+        recycle_s = torch.zeros_like(s_s) #[B, L, C]
+        recycle_z = torch.zeros_like(s_z) #[B, L, L, C]
+        recycle_bins = torch.zeros(*s_z.shape[:-1], device=device, dtype=torch.int64) #[B, L, L]
 
         assert no_recycles > 0
         for recycle_idx in range(no_recycles):
@@ -245,28 +229,29 @@ class FoldingTrunk(nn.Module):
                 recycle_z = self.recycle_z_norm(recycle_z.detach())
                 recycle_z += self.recycle_disto(recycle_bins.detach())
                 print("Successfully arrive before the trunk_iter in Folding Trunk")
+
                 #############JO: Check memory usage#############
-                device = torch.device("cuda:0")  # 假设使用第一块GPU
-
-                # 获取GPU总内存
+                device = torch.device("cuda:0")  
                 total_memory = torch.cuda.get_device_properties(device).total_memory
-
-                # 获取当前已分配的内存
                 allocated_memory = torch.cuda.memory_allocated(device)
-
-                # 计算剩余内存
                 free_memory = total_memory - allocated_memory
-
                 print(f'GPU total memory: {total_memory / 1024 ** 2:.2f} MB')
                 print(f'Allocated memory: {allocated_memory / 1024 ** 2:.2f} MB')
                 print(f'Remaining memory: {free_memory / 1024 ** 2:.2f} MB')
                 #############JO: Check memory usage#############
-                print("s_s_0 requires grad: ", s_s_0.requires_grad)
-                print("s_z_0 requires grad: ", s_z_0.requires_grad)
-                print("recycle_s requires grad: ", recycle_s.requires_grad)
-                print("recycle_z requires grad: ", recycle_z.requires_grad)
 
                 s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
+                print("Successfully arrive after the trunk_iter in Folding Trunk")
+
+                #############JO: Check memory usage#############
+                device = torch.device("cuda:0")  
+                total_memory = torch.cuda.get_device_properties(device).total_memory
+                allocated_memory = torch.cuda.memory_allocated(device)
+                free_memory = total_memory - allocated_memory
+                print(f'GPU total memory: {total_memory / 1024 ** 2:.2f} MB')
+                print(f'Allocated memory: {allocated_memory / 1024 ** 2:.2f} MB')
+                print(f'Remaining memory: {free_memory / 1024 ** 2:.2f} MB')
+                #############JO: Check memory usage#############
 
                 print("Successfully arrive after the trunk_iter in Folding Trunk")
                 print("s_s requires grad: ", s_s.requires_grad)

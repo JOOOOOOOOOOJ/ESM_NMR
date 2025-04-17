@@ -22,6 +22,7 @@ from esm.esmfold.v1.misc import (
     batch_encode_sequences,
     collate_dense_tensors,
     output_to_pdb,
+    output_to_pdb_download
 )
 
 
@@ -41,9 +42,8 @@ class ESMFold(nn.Module):
 
         self.distogram_bins = 64
         #JO: they are esm2 model (include model shapes, weights and bias ...) and alphabet separately
-        self.esm, self.esm_dict = esm.pretrained.esm2_t36_3B_UR50D()
-        #JO: freeze the model
-        self.esm.requires_grad_(False)
+        self.esm, self.esm_dict = esm.pretrained.esm2_t6_8M_UR50D() #JO: Can change the model here
+
         #JO: half the model, float32 to float16
         self.esm.half()
 
@@ -55,12 +55,11 @@ class ESMFold(nn.Module):
         print('ESM2 Attention Heads:\n',self.esm.attention_heads)
         print('ESM2 Layers:\n',self.esm.num_layers)
         #JO: register a tensor as a buffer, it is not a parameter
-        print("esm_dict (alphabet from esm2):", self.esm_dict)
         #JO: the reordered index can be referred to as af2_to_esm
         self.register_buffer("af2_to_esm", ESMFold._af2_to_esm(self.esm_dict))
         self.esm_s_combine = nn.Parameter(torch.zeros(self.esm.num_layers + 1))
 
-        #JO: This is for folding trunk, sequence dimention is 1024, pairwise dimention is 128
+        #JO: This is for ESM2, sequence dimention is 1024, pairwise dimention is 128
         c_s = cfg.trunk.sequence_state_dim
         c_z = cfg.trunk.pairwise_state_dim
         print("folding trunk sequence_state_dim:\n",c_s)
@@ -70,17 +69,13 @@ class ESMFold(nn.Module):
             #JO: Normalize over the last dimention and it should be the same as embedding dimention 2560
             #JO: Here the weights and bias are learnable
             #JO: size of esm_feats is C, and here is to transfer the representation to folding trunk size
-            LayerNorm(self.esm_feats),
+            LayerNorm(self.esm_feats), #JO: Here the LayerNorm is to normalize the last dimention of input
             nn.Linear(self.esm_feats, c_s),
             #JO: ReLU is a non-linear activation function, suitable for complex relationships and also the 
             #JO: gradient is not vanishing
             nn.ReLU(),
             nn.Linear(c_s, c_s),
         )
-
-        #JO: Freeze the parameters of esm_s_mlp
-        for param in self.esm_s_mlp.parameters():
-            param.requires_grad = False
 
         #JO: 0 is padding, N - 1 is unknown residues, N is mask. n_tokens_embed is the number of indexes
         #JO: The left residues are already defined in function: _af2_to_esm()
@@ -91,30 +86,22 @@ class ESMFold(nn.Module):
         '''
         JO: So the sequence dimention is selected as the embedding size
         The weights are learnable and applys to the normalized distribution. It has the same dimention 
-        as the embedding. padding_idx is to make sure the size of each input to embedding is the same, but 
+        as the embedding.
+        padding_idx is to make sure the size of each input to embedding is the same, but 
         hope it will have no influence on the result, so it is set to 0 and not updated during training
+        Here padding_idx = 0 means the first index is the padding index
         '''
         self.embedding = nn.Embedding(self.n_tokens_embed, c_s, padding_idx=0)
-        for param in self.embedding.parameters():
-            param.requires_grad = False
+
         #JO: folding trunk has triangular attention blocks inside, '**' is to discompose the dictionary
         self.trunk = FoldingTrunk(**cfg.trunk)
         '''
         JOJO: I would expect these layers to help analyze outputs from esm2
         '''
-        self.distogram_head = nn.Linear(c_z, self.distogram_bins)
-        #JO: Freeze
-        for param in self.distogram_head.parameters():
-            param.requires_grad = False
+        self.distogram_head = nn.Linear(c_z, self.distogram_bins) #JO: distogram_bins is 64
                 
         self.ptm_head = nn.Linear(c_z, self.distogram_bins)
-        #JO: Freeze
-        for param in self.ptm_head.parameters():
-            param.requires_grad = False
-        self.lm_head = nn.Linear(c_s, self.n_tokens_embed)
-        #JO: Freeze
-        for param in self.lm_head.parameters():
-            param.requires_grad = False
+
         self.lddt_bins = 50
         self.lddt_head = nn.Sequential(
             nn.LayerNorm(cfg.trunk.structure_module.c_s),
@@ -147,9 +134,8 @@ class ESMFold(nn.Module):
     ) -> torch.Tensor:
         """Adds bos/eos tokens for the language model, since the structure module doesn't use these."""
         batch_size = esmaa.size(0)
-
-        bosi, eosi = self.esm_dict.cls_idx, self.esm_dict.eos_idx
-        print("BOS and EOS index in esm2:", bosi, eosi)
+        #JO: bosi is 0, eosi is 2
+        bosi, eosi = self.esm_dict.cls_idx, self.esm_dict.eos_idx #
         #JO: Size is (B, 1), and fill the tensor with bosi. So add bos token to the beginning of each sequence
         #JO: Add eos token to the end of each sequence
         bos = esmaa.new_full((batch_size, 1), bosi)
@@ -157,8 +143,7 @@ class ESMFold(nn.Module):
         eos = esmaa.new_full((batch_size, 1), self.esm_dict.padding_idx)
         esmaa = torch.cat([bos, esmaa, eos], dim=1)
         # Use the first padding index as eos during inference.
-        esmaa[range(batch_size), (esmaa != 1).sum(1)] = eosi
-        print("What esmaa looks like after adding bos, padding and eos:", esmaa)
+        esmaa[range(batch_size), (esmaa != 1).sum(1)] = eosi #JO: This addition is to add bos = 0 in the beginning and eos = 2 in the end
         #JO: use the pretrained model to get the representation, this is the results after all the esm calculations
         res = self.esm(
             esmaa,
@@ -166,13 +151,13 @@ class ESMFold(nn.Module):
             need_head_weights=False,
         )
         #JO: So res is a dictionary. 'logit' refers to the output logits (B, L, A)
-        #JO: 'representations' refers to the output of each layer (nLayers, L, B, C)
+        #JO: 'representations' refers to the output of each layer (nLayers, L, B, C) and it's also a dictionary
         #JO: This step now is to stack the representations of each layer together and put them to dim=2
         #JO: So the final shape is (B, L, nLayers, C)
         esm_s = torch.stack(
             [v for _, v in sorted(res["representations"].items())], dim=2
-        )
-        #JO: Here only manipulate the second dimention, seems like to remove the bos and eos tokens
+        ) #JO: (B, L, nLayers, C)
+        #JO: Here only manipulate the second dimention, remove the bos and eos tokens
         esm_s = esm_s[:, 1:-1]  # B, L, nLayers, C
         return esm_s
 
@@ -226,9 +211,9 @@ class ESMFold(nn.Module):
         if masking_pattern is not None:
             #JO: make the index at the position of masking pattern to be the mask index, this is what we defined
             esmaa = self._mask_inputs_to_esm(esmaa, masking_pattern)
-        print("After adding the masking patterns inside ",esmaa)
         #JO: get the representation of the sequence: B, L, nLayers, C
         esm_s = self._compute_language_model_representations(esmaa)
+        last_layer = esm_s[:, :, -1, :]  # B, L, C
         #JO: shape of esm_s is (B, L, nLayers, C), with bos and eos removed
         #JO: Output of ADK1, [1, 214, 37, 2560]
         print("Shape of the result of ESM2 calculation",esm_s.shape)
@@ -247,18 +232,16 @@ class ESMFold(nn.Module):
         esm_s = (self.esm_s_combine.softmax(0).unsqueeze(0) @ esm_s).squeeze(2)
         print("After combination, shape of the result of ESM2 calculation",esm_s.shape)
 
-        return esm_s, aa, B, L, residx, mask, num_recycles
+        return esm_s, last_layer, aa, B, L, residx, mask, num_recycles
     
     def get_structure(self, esm_s, aa, B, L, residx, mask, num_recycles):
         #JO: Norm -> Linear -> ReLU -> Linear, output shape is (B, L, CS)
-        s_s_0 = self.esm_s_mlp(esm_s)
-        print("s_s_0 grad:", s_s_0.requires_grad)
-        print("Successfullt pass the mlp layer in Folding Trunk!!!")
+        s_s_0 = self.esm_s_mlp(esm_s) #JO: Sequence features
+        print("Successfully pass the mlp layer in Folding Trunk!!!")
         #JO: The s_z_0 shape is (B, L, L, CZ)
-        s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim)
+        s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim) #JO: Pairwise features
         #Another embedding, but the C is cs now (1024), shape is (B, L, CS)
-        s_s_0 += self.embedding(aa)
-        print("Successfully add the embedding to the sequence!!!")
+        s_s_0 += self.embedding(aa) #JO: Embedding (from aa) + MLP (from esm_s)
         #JO: This is the last mask here in esmfold
         structure: dict = self.trunk(
             s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
@@ -343,6 +326,21 @@ class ESMFold(nn.Module):
 
         return structure
 
+    def get_str_feats(self, esm_s, aa, B, L, residx, mask, num_recycles):
+        #JO: Norm -> Linear -> ReLU -> Linear, output shape is (B, L, CS)
+        s_s_0 = self.esm_s_mlp(esm_s) #JO: Sequence features
+        print("Successfully pass the mlp layer in Folding Trunk!!!")
+        #JO: The s_z_0 shape is (B, L, L, CZ)
+        s_z_0 = s_s_0.new_zeros(B, L, L, self.cfg.trunk.pairwise_state_dim) #JO: Pairwise features
+        #Another embedding, but the C is cs now (1024), shape is (B, L, CS)
+        s_s_0 += self.embedding(aa) #JO: Embedding (from aa) + MLP (from esm_s)
+        #JO: This is the last mask here in esmfold
+        structure: dict = self.trunk(
+            s_s_0, s_z_0, aa, residx, mask, no_recycles=num_recycles
+        )
+
+        return structure["s_s"], structure["s_z"]
+
     @torch.no_grad()
     def infer(
         #JO: Optional means the parameter can be None, Union means the parameter can be either of the types
@@ -392,8 +390,6 @@ class ESMFold(nn.Module):
             lambda x: x.to(self.device), (aatype, mask, residx, linker_mask)
         )
         print("aatype before input into forward function:", aatype)
-        print("B is its first dimention, L is its second dimention")
-        print("mask before input into forward function, which should be all one:", mask)
         esm_s, aa, B, L, residx, mask, num_recycles = self.forward(
             aatype,
             mask=mask,
@@ -420,6 +416,10 @@ class ESMFold(nn.Module):
     def output_to_pdb(self, output: T.Dict) -> T.List[str]:
         """Returns the pbd (file) string from the model given the model output."""
         return output_to_pdb(output)
+    
+    def output_to_pdb_download(self, output: T.Dict) -> T.List[str]:
+        """Returns the pbd (file) string from the model given the model output."""
+        return output_to_pdb_download(output)
 
     def infer_pdbs(self, seqs: T.List[str], *args, **kwargs) -> T.List[str]:
         """Returns list of pdb (files) strings from the model given a list of input sequences."""

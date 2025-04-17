@@ -2,8 +2,8 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+import os
 import typing as T
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -12,7 +12,11 @@ from torch import nn
 from openfold.np import residue_constants
 from openfold.np.protein import Protein as OFProtein
 from openfold.np.protein import to_pdb
+from openfold.np import residue_constants
 from openfold.utils.feats import atom14_to_atom37
+from esm.esmfold.v1.HydrogenBuilder import HydrogenBuilder
+from esm.esmfold.v1.legolas import EntryPDB, ChemicalShiftPredictor
+from esm.esmfold.v1.PdbBuilder import PdbBuilder
 
 
 def encode_sequence(
@@ -94,8 +98,15 @@ def batch_encode_sequences(
 
     return aatype, mask, residx, linker_mask, chain_index_list
 
+def output_to_pdbh_download(seq, coords, path):
+    pdb_creator = PdbBuilder(seq,
+        coords.cpu().detach().numpy(),
+        terminal_atoms=None,
+        has_hydrogens=True)
+    pdb_creator.save_pdb(path) #Can add title
 
-def output_to_pdb(output: T.Dict) -> T.List[str]:
+
+def output_to_pdb_download(output: T.Dict) -> T.List[str]:
     """Returns the pbd (file) string from the model given the model output."""
     # atom14_to_atom37 must be called first, as it fails on latest numpy if the
     # input is a numpy array. It will work if the input is a torch tensor.
@@ -119,6 +130,59 @@ def output_to_pdb(output: T.Dict) -> T.List[str]:
         )
         pdbs.append(to_pdb(pred))
     return pdbs
+
+
+def output_to_pdb(output: T.Dict) -> T.List[str]:
+    """Returns the pbd (file) string from the model given the model output."""
+    # atom14_to_atom37 must be called first, as it fails on latest numpy if the
+    # input is a numpy array. It will work if the input is a torch tensor.
+    # final_atom_positions = atom14_to_atom37(output["positions"][-1], output)
+    #JO: atom14 is the style PDB uses, 37 is the style AlphaFold uses
+    device_use = output["aligned_confidence_probs"].device
+    final_atom_positions = output["positions"][-1]
+    final_atom_positions = final_atom_positions.squeeze(0)
+    print("Does final_atom_positions require gradient?",final_atom_positions.requires_grad)
+    L = final_atom_positions.shape[0]
+    new_column = torch.full((L, 1, 3), float('nan'), device=final_atom_positions.device, requires_grad=True) 
+    atom_position_before_hydro = torch.cat([
+        final_atom_positions[:, :4, :],
+        new_column,
+        final_atom_positions[:, 4:, :]
+    ], dim=1)
+    print("Does atom_position_before_hydro require gradient?",atom_position_before_hydro.requires_grad)
+    #JO: Put all the items to numpy, cancel.
+    # output = {k: v.to("cpu").numpy() for k, v in output.items()}
+    # final_atom_positions = final_atom_positions.cpu().numpy()
+    # final_atom_mask = output["atom37_atom_exists"]
+    #JO: Use Openfold functions
+    restypes = residue_constants.restypes + ["X"]
+    aatype = output["aatype"].squeeze(0)  # 适用于 torch.Tensor 和 numpy.ndarray
+    aa_seq = "".join([restypes[idx] for idx in aatype])
+    coord_h = HydrogenBuilder(aa_seq, atom_position_before_hydro, device=device_use)
+    atom_position_after_hydrogen = coord_h.build_hydrogens()
+    print("Does atom_position_after_hydro require gradient?",atom_position_after_hydrogen.requires_grad)
+    #Legolas
+    NUM_MODELS = 5
+
+    interested_atypes = ["N"]
+    # Get the directory where models reside
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+
+    # Define paths relative to the script's directory
+    model_paths = {}
+    for atype in interested_atypes:
+        model_paths[atype] = [
+            os.path.join(script_dir, "ens_models", f"ens_model_{i+1}_{atype}.pt") for i in range(NUM_MODELS)
+        ]
+
+    entry = EntryPDB(aa_seq, atom_position_after_hydrogen, device_use, interested_atypes)
+    model = ChemicalShiftPredictor(model_paths, interested_atypes).to(device_use)
+    cs_prediction_type, cs_prediction = model(entry, 10)
+    for key, value in cs_prediction.items():
+        if isinstance(value, torch.Tensor):
+            print(f"Key: {key}, requires_grad: {value.requires_grad}")
+
+    return aa_seq, atom_position_before_hydro, atom_position_after_hydrogen, cs_prediction_type, cs_prediction
 
 #JO: try to stack the tensors in the sample list into a single tensor, also make sure they are the same shape
 def collate_dense_tensors(
