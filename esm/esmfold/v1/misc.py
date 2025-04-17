@@ -14,9 +14,9 @@ from openfold.np.protein import Protein as OFProtein
 from openfold.np.protein import to_pdb
 from openfold.np import residue_constants
 from openfold.utils.feats import atom14_to_atom37
-from esm.esmfold.v1.HydrogenBuilder import HydrogenBuilder
-from esm.esmfold.v1.legolas import EntryPDB, ChemicalShiftPredictor
-from esm.esmfold.v1.PdbBuilder import PdbBuilder
+# from esm.esmfold.v1.HydrogenBuilder import HydrogenBuilder
+# from esm.esmfold.v1.legolas import EntryPDB, ChemicalShiftPredictor
+# from esm.esmfold.v1.PdbBuilder import PdbBuilder
 
 
 def encode_sequence(
