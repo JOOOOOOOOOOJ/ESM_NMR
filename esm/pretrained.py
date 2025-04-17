@@ -75,7 +75,7 @@ def load_hub_workaround(url, device1="cpu"):
     try:
         #JO: For CHTC, specific pytorch version
         # torch.serialization.add_safe_globals([str(downloaded_file)])
-        data = torch.load(str(downloaded_file), map_location=device1, mmap=True)
+        data = torch.load(str(downloaded_file), map_location=device1, mmap=True, weights_only=False)
     except Exception as e:
         raise RuntimeError(f"Failed to load the model from {downloaded_file}. Error: {e}")
     return data
@@ -108,11 +108,11 @@ def load_model_and_alphabet_hub(model_name):
 def load_model_and_alphabet_local(model_location):
     """Load from local path. The regression weights need to be co-located"""
     model_location = Path(model_location)
-    model_data = torch.load(str(model_location), map_location="cpu")
+    model_data = torch.load(str(model_location), map_location="cpu", weights_only=False)
     model_name = model_location.stem
     if _has_regression_weights(model_name):
         regression_location = str(model_location.with_suffix("")) + "-contact-regression.pt"
-        regression_data = torch.load(regression_location, map_location="cpu")
+        regression_data = torch.load(regression_location, map_location="cpu", weights_only=False)
     else:
         regression_data = None
     return load_model_and_alphabet_core(model_name, model_data, regression_data)

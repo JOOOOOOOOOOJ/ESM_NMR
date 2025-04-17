@@ -44,7 +44,7 @@ def _load_model(model_name):
     install_aria2()
     if model_name.endswith(".pt"):  # local, treat as filepath
         model_path = Path(model_name)
-        model_data = torch.load(str(model_path), map_location="meta", mmap=True)
+        model_data = torch.load(str(model_path), map_location="meta", mmap=True, weights_only=False)
 
     else:  # load from hub
         url = f"https://dl.fbaipublicfiles.com/fair-esm/models/{model_name}.pt"
@@ -52,7 +52,7 @@ def _load_model(model_name):
         downloaded_file = _download_file(url)
         print(f"Loading downloaded model: {downloaded_file}")
         # torch.serialization.add_safe_globals([str(downloaded_file)])
-        model_data = torch.load(str(downloaded_file), map_location="cpu", mmap=True)
+        model_data = torch.load(str(downloaded_file), map_location="cpu", mmap=True, weights_only=False)
     '''
     JOJO: cfg and model_state are the most important information got from pretrained model.
     Get all the parameters needed for folding trunk (like everything shown in trunk.py Folding
