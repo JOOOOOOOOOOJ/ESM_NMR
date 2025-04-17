@@ -40,7 +40,7 @@ class ESMFold(nn.Module):
 
         self.distogram_bins = 64
         #JO: they are esm2 model (include model shapes, weights and bias ...) and alphabet separately
-        self.esm, self.esm_dict = esm.pretrained.esm2_t6_8M_UR50D() #JO: Can change the model here
+        self.esm, self.esm_dict = esm.pretrained.esm2_t36_3B_UR50D() #JO: Can change the model here
 
         #JO: half the model, float32 to float16
         self.esm.half()
