@@ -21,8 +21,6 @@ from esm.esmfold.v1.trunk import FoldingTrunk, FoldingTrunkConfig
 from esm.esmfold.v1.misc import (
     batch_encode_sequences,
     collate_dense_tensors,
-    output_to_pdb,
-    output_to_pdb_download
 )
 
 
